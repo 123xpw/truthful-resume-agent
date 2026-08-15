@@ -1,0 +1,16 @@
+.venv/
+__pycache__/
+*.pyc
+.DS_Store
+tmp/
+.env
+data/profile/profile.private.json
+data/facts/facts.json
+data/resume_fragments/fragments.json
+data/semantic_index/
+data/outputs/
+docs/claude_sync.md
+docs/codex_action_items.md
+docs/session_checkpoint.md
+data/application_outcomes.json
+data/jd_library/

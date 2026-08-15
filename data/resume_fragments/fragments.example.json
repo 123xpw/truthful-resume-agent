@@ -1,0 +1,144 @@
+[
+  {
+    "fact_id": "intern_optimization_ai_coding",
+    "section": "实习经历",
+    "entry_type": "internship",
+    "date": "2025",
+    "title": "运筹优化算法开发实习生",
+    "organization": "示例研究机构",
+    "keywords": "Claude Code, Codex, AI Coding, 任务拆解, 文档核验, Julia",
+    "bullets": {
+      "A": [
+        "\\textbf{AI Coding 流程：}用 Claude Code/Codex 辅助复杂代码库检索和文档初稿，采用需求复述、变量定位、人工核验闭环。",
+        "\\textbf{复杂任务拆解：}研读 SCUC 文献并映射 UnitCommitment.jl，整理 21 项约束的公式含义、源码路径和实现差异。",
+        "\\textbf{实验数据处理：}完成 36 到 72 时段 subhourly 转换，区分线性插值/重复填充，并生成 365 天 SCUC 算例库。"
+      ],
+      "B": [
+        "\\textbf{AI Coding 协作：}用 Claude Code/Codex 辅助复杂代码库检索和文档整理，人工核验公式含义、变量名和源码位置。",
+        "\\textbf{需求拆解记录：}围绕 SCUC 约束复现任务，整理论文公式、代码路径和实现差异，沉淀内部技术文档。"
+      ]
+    }
+  },
+  {
+    "fact_id": "intern_data_automation",
+    "section": "实习经历",
+    "entry_type": "internship",
+    "date": "2025",
+    "title": "数据自动化开发实习生",
+    "organization": "示例数据服务公司",
+    "keywords": "Python, REST API, 数据处理, 自动化任务, 阿里云",
+    "bullets": {
+      "A": [
+        "\\textbf{API 数据管道：}基于 IG REST Trading API 拉取指定指数实时数据，完成登录鉴权、数据清洗、均值计算与表格写入。",
+        "\\textbf{自动化任务：}处理多 sheet 报表追加、阶段对比和百分比计算，在阿里云按市场工作日与开市时间定时运行。"
+      ],
+      "B": [
+        "\\textbf{数据自动化：}用 Python 对接 IG REST Trading API，拉取指定指数数据并按模板写入多 sheet 报表。",
+        "\\textbf{定时处理：}在阿里云配置脚本定时运行，处理错误/null 标记、阶段对比和百分比计算等表格加工逻辑。"
+      ]
+    }
+  },
+  {
+    "fact_id": "intern_csharp_ai_mvp",
+    "section": "实习经历",
+    "entry_type": "internship",
+    "date": "2025",
+    "title": "C\\#开发实习生",
+    "organization": "示例仓储公司",
+    "keywords": "C\\#, Selenium, 多模态工具调用, Prompt 约束, JSON 结构化输出",
+    "bullets": {
+      "A": [
+        "\\textbf{多模态工具调用：}使用 C\\# 开发仓储推荐 MVP，通过 Selenium 上传物品图片至豆包页面，并用 Prompt 约束 JSON 输出。",
+        "\\textbf{规则推荐：}基于豆包返回的物品名称、预估尺寸/体积等信息，结合仓型规格推荐存储仓型号。"
+      ],
+      "B": [
+        "\\textbf{仓储推荐 MVP：}使用 C\\# 与 Selenium 搭建图片识别到仓型推荐的演示流程，通过 Prompt 约束豆包输出 JSON。",
+        "\\textbf{规则兜底：}根据返回的物品信息和仓型规格做规则匹配，完成可演示的小规模 MVP。"
+      ]
+    }
+  },
+  {
+    "fact_id": "project_chinese_learning_mvp",
+    "section": "项目经历",
+    "entry_type": "project",
+    "date": "2025 - 2026",
+    "title": "AI 中文学习小程序 MVP（脱敏示例）",
+    "organization": "",
+    "keywords": "Cursor, Claude, Coze, Agent 原型, Prompt 管理, AI 产品 Demo",
+    "bullets": {
+      "A": [
+        "\\textbf{MVP 原型搭建：}作为团队主要技术成员，基于 Cursor 将 UI 图转化为小程序页面，完成登录、注册、学习中心等演示原型。",
+        "\\textbf{基础接口对接：}围绕登录/注册流程理解后端接口和数据库字段，排查 AI 生成代码中的变量名、字段名和页面引用问题。",
+        "\\textbf{Coze Agent 原型：}梳理作文批改与分级对话需求，借助 Claude 生成并自检 Prompt，在 Coze 中配置可演示智能体。"
+      ],
+      "B": [
+        "\\textbf{小程序 MVP：}基于 Cursor 将 UI 图转化为微信小程序演示页面，完成登录、注册、学习中心等核心页面原型。",
+        "\\textbf{Agent Demo：}梳理作文批改与分级对话需求，借助 Claude 生成 Prompt，并在 Coze 中配置可演示智能体。"
+      ]
+    }
+  },
+  {
+    "fact_id": "project_emotion_pixel_eval",
+    "section": "项目经历",
+    "entry_type": "project_url",
+    "date": "2025 - 2026",
+    "title": "情绪像素艺术可视化：LLM 条件工程与多模态生成",
+    "url_text": "github.com/123xpw/emotion-pixel-viz",
+    "url": "https://github.com/123xpw/emotion-pixel-viz",
+    "keywords": "Prompt Engineering, DeepSeek API, CLIP 评估, 多模态生成, 消融实验",
+    "bullets": {
+      "A": [
+        "\\textbf{多模态生成链路：}构建“中文文本 -> 情绪 JSON -> 视觉生成条件”流程，引入人工审计降低错误情绪字段传导。",
+        "\\textbf{Prompt 压缩策略：}将多维情绪压缩为核心隐喻和 2-3 个视觉元素，缓解 Greedy Prompt 信息过载导致的生成失焦。",
+        "\\textbf{消融实验与评估：}设计 Baseline/Partial/Full 三条件实验，用 CLIP ViT-B/32 评估图文对齐，Partial 0.2163，Full 0.2593。"
+      ],
+      "B": [
+        "\\textbf{多模态生成链路：}构建中文文本到情绪 JSON、再到视觉生成条件的流程，用 DeepSeek API 输出结构化情绪信息。",
+        "\\textbf{效果评估：}设计 Baseline/Partial/Full 三组对照实验，用 CLIP ViT-B/32 评估图文对齐，记录 Partial 0.2163、Full 0.2593。"
+      ]
+    }
+  },
+  {
+    "fact_id": "project_truthful_resume_agent",
+    "source_fact_ids": [
+      "project_truthful_resume_agent_cli",
+      "project_truthful_resume_agent_rag_qdrant"
+    ],
+    "section": "项目经历",
+    "entry_type": "project",
+    "date": "2025 - 2026",
+    "title": "Truthful Resume Agent：面向 JD 的真实经历匹配与 RAG 辅助工具",
+    "organization": "",
+    "keywords": "Python, Qdrant, fastembed, DeepSeek API, RAG, Markdown, HTML, LaTeX",
+    "bullets": {
+      "A": [
+        "\\textbf{本地 CLI 流程：}构建“JD 解析 -> 真实经历召回 -> 可写性审核 -> 简历草稿生成”流程，将岗位要求与个人事实库对齐，并在生成前拦截缺少事实依据或面试难以解释的内容。",
+        "\\textbf{语义检索：}基于 fastembed 与 Qdrant 构建本地事实片段索引，将 JD 要求与个人真实经历做相似度召回，并结合关键词匹配生成可审查的 match report 与 JD Insight HTML。",
+        "\\textbf{RAG 表达校验：}在 JD Insight 中调用 DeepSeek 生成候选措辞，并通过事实编号溯源校验与事实边界检查过滤无法追溯、超出经历范围或容易造成过度包装的输出。"
+      ],
+      "B": [
+        "\\textbf{本地 CLI 流程：}构建“JD 解析 -> 真实经历召回 -> 可写性审核 -> 简历草稿生成”流程，将岗位要求与个人事实库对齐，避免缺少事实依据的内容进入草稿。",
+        "\\textbf{语义检索：}基于 fastembed 与 Qdrant 构建本地事实片段索引，将 JD 要求与个人真实经历做相似度召回，并结合关键词匹配生成可审查报告。",
+        "\\textbf{RAG 表达校验：}在 JD Insight 中基于已匹配事实调用 DeepSeek 生成候选措辞，并用事实编号溯源校验与事实边界检查过滤过度包装的输出。"
+      ]
+    }
+  },
+  {
+    "fact_id": "project_dl_learning_lab",
+    "section": "项目经历",
+    "entry_type": "project_url",
+    "date": "2025 - 2026",
+    "title": "DL-Learning-Lab：深度学习与视觉生成学习项目",
+    "url_text": "github.com/123xpw/DL-Learning-Lab",
+    "url": "https://github.com/123xpw/DL-Learning-Lab",
+    "keywords": "PyTorch, DDPM, CFG, Stable Diffusion LoRA, SegFormer",
+    "bullets": {
+      "A": [
+        "\\textbf{开源学习实践：}基于 PyTorch 完成 DDPM/CFG、Stable Diffusion LoRA、SegFormer 等实验，整理代码与理论笔记。"
+      ],
+      "B": [
+        "\\textbf{学习项目：}基于 PyTorch 复现 DDPM/CFG、Stable Diffusion LoRA、SegFormer 等实验并整理学习笔记。"
+      ]
+    }
+  }
+]

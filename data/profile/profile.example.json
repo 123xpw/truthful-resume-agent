@@ -1,0 +1,22 @@
+{
+  "confirmation": "desensitized_sample",
+  "name": "示例候选人",
+  "birth": "2000年1月",
+  "phone": "13800000000",
+  "email": "candidate@example.com",
+  "photo_source": "",
+  "education": {
+    "date": "2022.09 - 2026.07",
+    "school": "示例大学",
+    "major": "计算机科学与技术专业",
+    "details": "GPA与排名已脱敏"
+  },
+  "awards": [
+    "示例奖项（已脱敏）"
+  ],
+  "skills": [
+    "AI 工具与应用：Claude Code, Codex, Prompt Engineering",
+    "编程语言：Python",
+    "工程工具：Linux, Git, REST API"
+  ]
+}

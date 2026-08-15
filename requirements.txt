@@ -1,0 +1,4 @@
+fastembed==0.8.0
+numpy==2.5.2
+qdrant-client==1.19.0
+requests==2.34.2

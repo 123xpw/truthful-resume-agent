@@ -1,0 +1,199 @@
+[
+  {
+    "id": "intern_optimization_ai_coding",
+    "title": "Optimization internship: AI Coding for complex codebase analysis",
+    "source_file": "data/sample_profile.md",
+    "source_section": "Desensitized Internship A",
+    "fact_type": "internship",
+    "keywords": [
+      "Claude Code",
+      "Codex",
+      "AI Coding",
+      "AI programming tools",
+      "complex codebase",
+      "documentation",
+      "verification",
+      "requirement analysis"
+    ],
+    "summary": "Used Claude Code and Codex to assist complex codebase search and documentation drafts; manually verified formula meaning, variable names, and source-code locations.",
+    "boundaries": [
+      "AI tools assisted retrieval and drafting; final verification was manual.",
+      "Do not claim independent implementation of all mathematical constraints."
+    ],
+    "risk": "medium"
+  },
+  {
+    "id": "intern_data_automation",
+    "title": "Data automation internship: REST API and Excel workflow",
+    "source_file": "data/sample_profile.md",
+    "source_section": "Desensitized Internship B",
+    "fact_type": "internship",
+    "keywords": [
+      "Python",
+      "REST API",
+      "ETL",
+      "Excel",
+      "multi-sheet",
+      "cloud schedule",
+      "data processing"
+    ],
+    "summary": "Built a Python data automation workflow using REST API, token-based login, selected index data retrieval, average calculation, multi-sheet Excel filling, and cloud scheduled execution.",
+    "boundaries": [
+      "No independent alerting system.",
+      "No pagination or rate-limit handling.",
+      "No quantified efficiency improvement unless measured later."
+    ],
+    "risk": "medium"
+  },
+  {
+    "id": "intern_csharp_ai_mvp",
+    "title": "C# internship: multimodal warehouse recommendation MVP",
+    "source_file": "data/sample_profile.md",
+    "source_section": "Desensitized Internship C",
+    "fact_type": "internship",
+    "keywords": [
+      "C#",
+      "Selenium",
+      "multimodal",
+      "Prompt",
+      "JSON",
+      "business rules",
+      "MVP"
+    ],
+    "summary": "Built a C# MVP that uses Selenium/browser automation to submit item images to a multimodal model page, constrains JSON output with prompts, and applies business rules for storage-type recommendation.",
+    "boundaries": [
+      "Did not train a vision model.",
+      "Do not describe this as official model API integration unless code confirms it.",
+      "MVP was usable for demo and small tests, not proven production-grade."
+    ],
+    "risk": "medium"
+  },
+  {
+    "id": "project_chinese_learning_mvp",
+    "title": "AI Chinese learning mini program MVP",
+    "source_file": "data/sample_profile.md",
+    "source_section": "Desensitized Project A",
+    "fact_type": "project",
+    "keywords": [
+      "Cursor",
+      "AI programming tools",
+      "mini-program",
+      "MVP",
+      "AI application",
+      "user-facing",
+      "interface",
+      "database fields",
+      "Coze",
+      "Agent",
+      "intelligent dialogue",
+      "Prompt"
+    ],
+    "summary": "Used Cursor to convert UI designs into mini-program demo pages; understood basic login/registration interfaces and database fields; used Claude-generated prompts and Coze for demo agents.",
+    "boundaries": [
+      "Later completion involved external development support.",
+      "Do not claim full production system ownership.",
+      "Do not claim complex custom Agent architecture."
+    ],
+    "risk": "medium"
+  },
+  {
+    "id": "project_emotion_pixel_eval",
+    "title": "Emotion pixel visualization: LLM pipeline and CLIP evaluation",
+    "source_file": "data/sample_profile.md",
+    "source_section": "Desensitized Project B",
+    "fact_type": "project",
+    "keywords": [
+      "DeepSeek API",
+      "model API",
+      "Prompt Engineering",
+      "JSON",
+      "content generation",
+      "effect evaluation",
+      "CLIP",
+      "evaluation",
+      "ablation"
+    ],
+    "summary": "Built a pipeline from Chinese text to emotion JSON to visual generation conditions; designed prompt compression; evaluated image-text alignment with CLIP ViT-B/32 across Baseline, Partial, and Full settings.",
+    "boundaries": [
+      "Application/evaluation project, not large-scale model training.",
+      "Evaluation rigor depends on sample size and experiment details."
+    ],
+    "risk": "high"
+  },
+  {
+    "id": "project_dl_learning_lab",
+    "title": "DL-Learning-Lab: deep learning and visual generation learning project",
+    "source_file": "data/sample_profile.md",
+    "source_section": "Public learning project",
+    "fact_type": "project",
+    "keywords": [
+      "PyTorch",
+      "DDPM",
+      "CFG",
+      "Stable Diffusion LoRA",
+      "SegFormer",
+      "algorithm reproduction"
+    ],
+    "summary": "Completed PyTorch experiments covering DDPM/CFG, Stable Diffusion LoRA, SegFormer, and related notes.",
+    "boundaries": [
+      "Learning/open-source practice, not a research publication or enterprise production result."
+    ],
+    "risk": "high"
+  },
+  {
+    "id": "project_truthful_resume_agent_cli",
+    "title": "Truthful Resume Agent: JD matching and fact-gated resume CLI",
+    "source_file": "backend/resume_agent",
+    "source_section": "Public CLI workflow",
+    "fact_type": "project",
+    "keywords": [
+      "Python",
+      "CLI",
+      "JD matching",
+      "truthfulness gate",
+      "fact bank",
+      "manual review",
+      "A/B/C/D confirmation",
+      "Markdown",
+      "HTML",
+      "LaTeX",
+      "DeepSeek API"
+    ],
+    "summary": "Built a local Python CLI that saves public JDs, matches them against a structured personal fact bank, generates match reports and review sheets, requires candidate-run A/B/C/D confirmation before resume generation, and outputs Markdown/HTML JD insight reports plus LaTeX resume drafts.",
+    "boundaries": [
+      "Personal/local CLI workflow, not a multi-user SaaS product.",
+      "Does not autonomously decide whether an experience is true; the candidate must run decide and confirm A/B/C/D.",
+      "Does not automatically submit resumes or write unconfirmed LLM output into delivered resumes.",
+      "Interactive confirmation markers are a friction barrier, not cryptographic proof of human authorship."
+    ],
+    "risk": "medium"
+  },
+  {
+    "id": "project_truthful_resume_agent_rag_qdrant",
+    "title": "Truthful Resume Agent: Qdrant semantic retrieval and bounded RAG phrasing",
+    "source_file": "backend/resume_agent",
+    "source_section": "Public semantic retrieval and JD Insight workflow",
+    "fact_type": "project",
+    "keywords": [
+      "RAG",
+      "Qdrant",
+      "vector database",
+      "向量数据库",
+      "semantic retrieval",
+      "embedding",
+      "fastembed",
+      "DeepSeek API",
+      "fact_id citation verification",
+      "boundary check",
+      "guardrails"
+    ],
+    "summary": "Replaced a JSON embedding cache with a local embedded Qdrant vector database for fact-chunk semantic retrieval, then built a bounded RAG phrasing step in explain-jd: retrieved JD-matched facts are sent to DeepSeek for phrasing candidates, and each candidate is rejected unless its fact_id is in the matched set and a separate boundary check confirms the sentence does not exceed the cited fact.",
+    "boundaries": [
+      "Local embedded Qdrant collection over a small personal fact bank, not large-scale vector database tuning.",
+      "RAG is used for bounded phrasing candidates in a JD insight report, not for autonomously generating final resume bullets.",
+      "No LangChain, LlamaIndex, MCP, vLLM, Ollama, KV-cache optimization, SFT, or RL implementation.",
+      "Does not implement a production knowledge-base system with external document ingestion, access control, monitoring, or multi-user serving."
+    ],
+    "risk": "high"
+  }
+]
