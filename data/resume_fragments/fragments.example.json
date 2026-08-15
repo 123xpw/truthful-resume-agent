@@ -105,10 +105,12 @@
       "project_truthful_resume_agent_rag_qdrant"
     ],
     "section": "项目经历",
-    "entry_type": "project",
+    "entry_type": "project_url",
     "date": "2025 - 2026",
-    "title": "Truthful Resume Agent：面向 JD 的真实经历匹配与 RAG 辅助工具",
+    "title": "Truthful Resume Agent：基于 Qdrant 的 JD 匹配与受限生成",
     "organization": "",
+    "url_text": "github.com/123xpw/truthful-resume-agent",
+    "url": "https://github.com/123xpw/truthful-resume-agent",
     "keywords": "Python, Qdrant, fastembed, DeepSeek API, RAG, Markdown, HTML, LaTeX",
     "bullets": {
       "A": [
