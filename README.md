@@ -1,5 +1,7 @@
 # Truthful Resume Agent
 
+[English](README.md) | [简体中文](README.zh-CN.md)
+
 An evidence-grounded CLI for understanding a job description, retrieving
 relevant experience, and producing a review-gated resume draft.
 
