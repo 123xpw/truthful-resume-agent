@@ -276,7 +276,7 @@ def _assert_review_renders_composite_across_match_levels() -> None:
         project_root=PROJECT_ROOT,
     )
     _assert(review.count("display_fact_id: `project_truthful_resume_agent`") == 1, "composite display block missing")
-    _assert(review.count("Truthful Resume Agent：基于 Qdrant 的 JD 匹配与受限生成") == 1, "composite project rendered more than once")
+    _assert(review.count("Truthful Resume Agent：JD 匹配与受限生成") == 1, "composite project rendered more than once")
     _assert(review.count("- fact_id: `project_truthful_resume_agent_cli`") == 1, "CLI source fact missing")
     _assert(review.count("- fact_id: `project_truthful_resume_agent_rag_qdrant`") == 1, "RAG source fact missing")
     _assert(review.count("- mastery_check: `待确认`") == 1, "composite strong/weak split should ask once")
@@ -959,7 +959,7 @@ def run_smoke() -> None:
             "composite source facts should render as one project entry",
         )
         _assert(
-            "基于 Qdrant 的 JD 匹配与受限生成" in composite_tex,
+            "Truthful Resume Agent：JD 匹配与受限生成" in composite_tex,
             "composite project title missing from generated resume",
         )
 
