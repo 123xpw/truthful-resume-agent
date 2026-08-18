@@ -5,13 +5,13 @@ from pathlib import Path
 import re
 
 from .fragments import ResumeFragment, load_fragments
-from .review_parser import INTERACTIVE_CONFIRMATION
+from .review_parser import INTERACTIVE_CONFIRMATION, write_review_state
 
 
 CHOICE_LABELS = {
-    "A": "A 本轮采用核心版",
-    "B": "B 本轮采用保守版",
-    "C": "C 本轮不使用这段经历",
+    "A": "A 事实准确且能解释核心版，允许进入候选池",
+    "B": "B 事实准确但只允许保守版进入候选池",
+    "C": "C 事实基本准确但目前不愿承担追问风险",
     "D": "D 事实记录有误，需要回查事实库",
 }
 
@@ -36,7 +36,7 @@ def _replace_field(section: str, field: str, value: str) -> str:
     pattern = re.compile(rf"^- {re.escape(field)}:\s*.*$", re.MULTILINE)
     replacement = f"- {field}: {value}"
     if pattern.search(section):
-        return pattern.sub(replacement, section, count=1)
+        return pattern.sub(lambda _: replacement, section, count=1)
     anchor = re.search(r"^- allowed_options:.*$", section, re.MULTILINE)
     if anchor:
         insert_at = anchor.end()
@@ -106,6 +106,7 @@ def run_interactive_decision(
     review_path: Path,
     collect_notes: bool = False,
     project_root: Path | None = None,
+    revisit_all: bool = False,
 ) -> int:
     text = review_path.read_text(encoding="utf-8")
     starts = [match.start() for match in re.finditer(r"^(?:## |### )", text, re.MULTILINE)]
@@ -119,7 +120,7 @@ def run_interactive_decision(
         if not fact_ids:
             rebuilt.append(section)
             continue
-        if not PENDING_MASTERY_RE.search(section):
+        if not revisit_all and not PENDING_MASTERY_RE.search(section):
             rebuilt.append(section)
             continue
 
@@ -134,9 +135,14 @@ def run_interactive_decision(
             print(f"真实依据：{_terminal_safe(evidence.group(1))}")
         if boundary:
             print(f"边界风险：{_terminal_safe(boundary.group(1))}")
+        if revisit_all and not PENDING_MASTERY_RE.search(section):
+            current = MASTERY_LINE_RE.search(section)
+            if current:
+                print(f"当前选择：{_terminal_safe(current.group(0).removeprefix('- mastery_check:').strip())}")
         _print_wording_options(_find_fragment(project_root, fact_ids))
         print("\n判断标准：")
-        print("- facts.json 记录用户确认过的经历；这里决定本次投递采用哪套具体文案。")
+        print("- facts.json 记录用户确认过的经历；这里只确认文案真实性和你愿意承担的追问范围。")
+        print("- A/B 进入候选池，不代表一定写入；Agent 会结合 JD 和版面容量生成选材报告。")
         for label in CHOICE_LABELS.values():
             print(f"- {label}")
 
@@ -176,5 +182,6 @@ def run_interactive_decision(
             break
 
     review_path.write_text("".join(rebuilt).lstrip("\n"), encoding="utf-8")
+    write_review_state(review_path)
     print(f"\n已更新 {updated} 条确认结果：{review_path}")
     return 0

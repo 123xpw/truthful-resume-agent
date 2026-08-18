@@ -14,6 +14,12 @@ class EducationProfile:
 
 
 @dataclass(frozen=True)
+class SkillProfile:
+    text: str
+    source_fact_ids: tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class ResumeProfile:
     name: str
     birth: str
@@ -22,7 +28,7 @@ class ResumeProfile:
     photo_source: str
     education: EducationProfile
     awards: tuple[str, ...]
-    skills: tuple[str, ...]
+    skills: tuple[SkillProfile, ...]
     confirmation: str
     source_path: Path
 
@@ -53,6 +59,25 @@ def load_profile(project_root: Path) -> ResumeProfile:
     if missing:
         raise ValueError(f"Resume profile is missing required fields: {', '.join(missing)}")
 
+    skills: list[SkillProfile] = []
+    for item in raw.get("skills", []):
+        if isinstance(item, str):
+            skills.append(SkillProfile(text=item, source_fact_ids=()))
+            continue
+        if not isinstance(item, dict) or not str(item.get("text", "")).strip():
+            raise ValueError("profile skills must be strings or objects with a non-empty text field")
+        source_fact_ids = item.get("source_fact_ids", [])
+        if not isinstance(source_fact_ids, list) or not all(
+            isinstance(fact_id, str) and fact_id.strip() for fact_id in source_fact_ids
+        ):
+            raise ValueError("profile skill source_fact_ids must be a list of non-empty strings")
+        skills.append(
+            SkillProfile(
+                text=str(item["text"]),
+                source_fact_ids=tuple(source_fact_ids),
+            )
+        )
+
     return ResumeProfile(
         name=str(raw["name"]),
         birth=str(raw["birth"]),
@@ -66,7 +91,7 @@ def load_profile(project_root: Path) -> ResumeProfile:
             details=str(education["details"]),
         ),
         awards=tuple(str(item) for item in raw.get("awards", [])),
-        skills=tuple(str(item) for item in raw.get("skills", [])),
+        skills=tuple(skills),
         confirmation=str(raw.get("confirmation", "unrecorded")),
         source_path=path,
     )

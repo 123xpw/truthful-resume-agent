@@ -27,8 +27,9 @@ not a substitute for competitive resume quality.
 5. System builds a match matrix.
 6. System identifies unsupported requirements.
 7. System generates resume bullet drafts with evidence links.
-8. User manually confirms, edits, rejects, or marks items as "needs preparation".
-9. System stores the final version and decision history.
+8. User confirms factual wording, explainability boundaries, or interview-risk vetoes.
+9. System ranks only eligible source-linked fragments against the JD and page capacity, then reports included and omitted items.
+10. System stores the final version, selection plan, and decision history.
 
 ## Core Pages
 
@@ -73,6 +74,7 @@ Tracks company, job title, JD, generated draft, manual edits, and final decision
 
 - The system refuses to write unsupported technologies.
 - Every generated bullet has a fact source.
+- Editorial selection is performed by the system rather than delegated to the candidate, and every omitted eligible item has a visible reason.
 - The user can see why a JD requirement is matched or not matched.
 - The output includes interview risks, not only resume wording.
 - The demo can be explained in two minutes.

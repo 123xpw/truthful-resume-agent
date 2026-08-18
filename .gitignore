@@ -13,4 +13,15 @@ docs/claude_sync.md
 docs/codex_action_items.md
 docs/session_checkpoint.md
 data/application_outcomes.json
+data/agent_memory.json
 data/jd_library/
+data/evaluation/career_trends.md
+
+# Internal working/handoff docs (not for the public repo)
+docs/qwen_no_token_period.md
+docs/handover_*.md
+docs/project_issues_to_fix.md
+docs/project_review_and_resume_highlights.md
+docs/project_analysis_and_interview_guide.md
+docs/project_analysis_and_interview_guide.html
+docs/evolution_plan_memory_three_tiers.md

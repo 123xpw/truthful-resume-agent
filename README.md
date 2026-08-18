@@ -5,12 +5,15 @@
 An evidence-grounded CLI for understanding a job description, retrieving
 relevant experience, and producing a review-gated resume draft.
 
-It is not a generic "make my resume sound stronger" generator. The system
-separates three questions:
+It is not a generic "make my resume sound stronger" generator. Most AI
+resume tools help you polish claims; this one works the other way. The fact
+bank is the single source of truth, the LLM is forbidden from writing resume
+wording, and every sentence is manually confirmed and traceable to a source
+fact. The system separates three questions:
 
 1. What does this JD require?
 2. Which recorded experiences support those requirements?
-3. Which exact wording is the candidate willing to defend in an interview?
+3. Which exact wording is defensible, and which eligible items should the agent select for this JD and page budget?
 
 [Live desensitized JD Insight demo](https://123xpw.github.io/truthful-resume-agent/)
 
@@ -25,6 +28,9 @@ separates three questions:
 - Rejects pending or hand-edited decisions during resume generation.
 - Produces Markdown/HTML reports and a LaTeX resume draft.
 - Records observed application outcomes against the generated PDF hash.
+- Ships a LangChain + LangGraph conversational agent with tool calling,
+  a retrieve → generate → verify → reflect loop, and short-term (checkpoint)
+  plus long-term (JSON) memory.
 
 The optional LLM path helps explain the JD and generate review-only interview
 questions or wording candidates. LLM output cannot update facts, confirmation
@@ -70,21 +76,29 @@ private profile or API key is needed for this path.
   --name demo_tencent
 
 .venv/bin/python backend/run_cli.py decide --name demo_tencent
-.venv/bin/python backend/run_cli.py finalize --name demo_tencent
+.venv/bin/python backend/run_cli.py finalize --name demo_tencent --llm-select
 .venv/bin/python backend/run_cli.py status --name demo_tencent
 ```
 
 During `decide`, each matched experience shows two complete alternatives:
 
-- `A`: use the core version for this application.
-- `B`: use the conservative version.
-- `C`: omit this experience from this application.
+- `A`: the core wording is accurate and explainable; allow it into the candidate pool.
+- `B`: only the conservative wording is accurate and explainable; allow it into the pool.
+- `C`: the fact is broadly accurate, but the candidate does not currently accept its follow-up risk.
 - `D`: the underlying fact needs correction.
+
+A/B confirms truthfulness and explainability, not editorial selection.
+`finalize` selects at most three internships and two projects and writes
+`selection_plan.md`. With `--llm-select`, the model may return only existing
+fragment IDs; unknown, duplicate, wrong-section, or over-capacity IDs fail
+closed, and model prose never enters the resume.
 
 `decide` requires a TTY and rejects piped stdin. This is a friction barrier,
 not cryptographic proof that a human typed the answer. Resume generation also
 checks for pending decisions, interactive confirmation markers, and stale
-artifacts.
+artifacts. If the JD, fact bank, or resume fragments change after review, the
+review itself becomes stale: `decide`, `generate`, `finalize`, and `deliver`
+refuse it until `prepare` rebuilds the review and the candidate confirms again.
 
 To compile the generated TeX, install XeLaTeX/latexmk or Tectonic. When only
 Tectonic is available, run the command printed by `finalize`.
@@ -152,13 +166,16 @@ Public JD
 
 Matched fact IDs
    --> source-linked A/B fragments
-   --> candidate-run A/B/C/D decision
+   --> candidate truth/explainability confirmation
+   --> restricted 3-internship/2-project selection plan
+   --> included/omitted report
    --> stale/pending/confirmation checks
    --> LaTeX resume draft
 ```
 
-The trusted resume path is deterministic. Experimental LLM wording shown in
-JD Insight is review-only and has no code path into `resume_generator.py`.
+Trusted resume wording remains deterministic and source-linked. Optional LLM
+selection ranks only confirmed fragment IDs and cannot generate or rewrite a
+resume sentence. Experimental LLM wording remains review-only.
 
 ## Evaluated Retrieval, Not a Vector-Database Claim
 
@@ -175,6 +192,7 @@ Re-run the evaluation:
 
 ```bash
 .venv/bin/python -m backend.resume_agent.eval_matchers
+.venv/bin/python -m backend.resume_agent.rag_eval   # Recall@K and MRR
 ```
 
 ## Main Commands
@@ -185,10 +203,12 @@ Re-run the evaluation:
 | `analyze` | Match a JD and write a deterministic report |
 | `explain-jd` | Generate the checkable JD Insight Markdown/HTML report |
 | `prepare` | Save a JD and create its report/review sheet |
-| `decide` | Review exact A/B wording in a real terminal |
-| `finalize` | Generate TeX after all review gates pass |
+| `decide` | Confirm the truthfulness/explainability boundary of exact A/B wording |
+| `finalize` | Write a selection report and generate TeX; optional `--llm-select` |
 | `status` / `list` | Show pending, stale, draft, and export-ready states |
 | `gaps` / `expand-review` | Inspect missing resume coverage without auto-promoting facts |
+| `gap-check` | Warn about missing evidence for a single JD (terminal + HTML) |
+| `career-trends` | Aggregate missing-tech gaps across JDs and flag repeated ones |
 | `record-outcome` | Record an observed application state and PDF hash |
 
 Run `python3 backend/run_cli.py --help` for all options.
@@ -220,7 +240,7 @@ clean public history, as this repository does.
 ```
 
 The smoke suite covers pending-review rejection, TTY gating, EOF recovery,
-composite facts, stale artifact detection, semantic-candidate isolation,
+composite facts, stale review/artifact detection, semantic-candidate isolation,
 unsupported-term blocking, outcome hashes, and delivery gates.
 
 Design details and tradeoffs are in `docs/technical_design.md`,

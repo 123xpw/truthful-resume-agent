@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import lru_cache
 import json
 from pathlib import Path
 from typing import Any
@@ -21,6 +22,7 @@ class ResumeFragment:
     url: str = ""
 
 
+@lru_cache(maxsize=32)
 def load_fragments(path: Path | None = None) -> dict[str, ResumeFragment]:
     if path is None:
         path = Path(__file__).resolve().parents[2] / "data" / "resume_fragments" / "fragments.json"

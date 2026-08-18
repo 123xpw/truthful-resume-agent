@@ -3,13 +3,14 @@ from __future__ import annotations
 from pathlib import Path
 
 from .analyzer import AnalysisResult, FactMatch
+from .fact_store import load_facts
 from .fragments import ResumeFragment, load_fragments
 
 
 MASTERY_OPTIONS = (
-    "A 本轮采用核心版 / "
-    "B 本轮采用保守版 / "
-    "C 本轮不使用这段经历 / "
+    "A 事实准确且能解释核心版，允许进入候选池 / "
+    "B 事实准确但只允许保守版进入候选池 / "
+    "C 事实基本准确但目前不愿承担追问风险 / "
     "D 事实记录有误，需要回查事实库"
 )
 
@@ -19,7 +20,7 @@ def _render_match_block(match: FactMatch, default_decision: str) -> list[str]:
     lines.append(f"### {match.fact.title}")
     lines.append("")
     lines.append(f"- fact_id: `{match.fact.id}`")
-    lines.append(f"- match_level: `{match.level}`")
+    lines.append(f"- retrieval_signal: `{match.level}` (retrieval only; not resume priority)")
     lines.append(f"- matched_keywords: {', '.join(match.matched_keywords)}")
     lines.append(f"- risk_level: `{match.fact.risk}`")
     lines.append(f"- evidence: {match.fact.summary}")
@@ -57,7 +58,7 @@ def _render_composite_match_block(
     lines.append(f"- display_fact_id: `{fragment.fact_id}`")
     for fact_id in fragment.source_fact_ids:
         lines.append(f"- fact_id: `{fact_id}`")
-    lines.append(f"- match_level: `{level}`")
+    lines.append(f"- retrieval_signal: `{level}` (retrieval only; not resume priority)")
     lines.append(f"- matched_keywords: {', '.join(matched_keywords)}")
     lines.append(f"- risk_level: `{risk}`")
     lines.append(f"- evidence: {' | '.join(evidence)}")
@@ -80,22 +81,38 @@ def _coalesce_display_matches(
     if project_root is None:
         return strong_matches, weak_matches
     fragments = load_fragments(project_root / "data" / "resume_fragments" / "fragments.json")
+    facts = {
+        fact.id: fact
+        for fact in load_facts(project_root / "data" / "facts" / "facts.json")
+    }
     composites = [fragment for fragment in fragments.values() if len(fragment.source_fact_ids) > 1]
     all_matches = [*strong_matches, *weak_matches]
     remaining = {match.fact.id: match for match in all_matches}
+    consumed_source_ids: set[str] = set()
     strong_items: list[FactMatch | list[FactMatch]] = []
     weak_items: list[FactMatch | list[FactMatch]] = []
 
     for fragment in composites:
-        source_matches = [remaining.get(fact_id) for fact_id in fragment.source_fact_ids]
-        if all(source_matches):
-            item = [match for match in source_matches if match is not None]
-            if any(match.level == "strong" for match in item):
-                strong_items.append(item)
-            else:
-                weak_items.append(item)
-            for fact_id in fragment.source_fact_ids:
-                remaining.pop(fact_id, None)
+        source_ids = set(fragment.source_fact_ids)
+        if source_ids & consumed_source_ids:
+            continue
+        if not any(fact_id in remaining for fact_id in fragment.source_fact_ids):
+            continue
+        if not all(fact_id in facts for fact_id in fragment.source_fact_ids):
+            continue
+
+        item = [
+            remaining.get(fact_id)
+            or FactMatch(fact=facts[fact_id], matched_keywords=[], level="weak")
+            for fact_id in fragment.source_fact_ids
+        ]
+        if any(match.level == "strong" for match in item):
+            strong_items.append(item)
+        else:
+            weak_items.append(item)
+        for fact_id in fragment.source_fact_ids:
+            remaining.pop(fact_id, None)
+        consumed_source_ids.update(source_ids)
 
     strong_items.extend(match for match in strong_matches if match.fact.id in remaining)
     weak_items.extend(match for match in weak_matches if match.fact.id in remaining)
@@ -165,19 +182,19 @@ def render_review_sheet(
     lines.append("")
     lines.append("For each fact below, answer only one practical question:")
     lines.append("")
-    lines.append("How strongly may this fact be used in this specific application?")
+    lines.append("Which wording remains truthful and explainable if an interviewer follows up?")
     lines.append("")
     lines.append(f"`{MASTERY_OPTIONS}`")
     lines.append("")
-    lines.append("The fact bank records candidate-confirmed experience. This review selects the concrete wording used for this JD.")
-    lines.append("Use A for the core fragment, B for the conservative fragment, C to omit it from this application, and D when the fact record itself needs correction.")
-    lines.append("The resume generator only uses A/B items. C/D items are blocked by default.")
+    lines.append("The fact bank records candidate-confirmed experience. This review sets the strongest wording allowed into the candidate pool.")
+    lines.append("Use A when the core fragment is accurate and explainable, B when only the conservative fragment is safe, C when the fact is broadly accurate but you do not want its interview risk, and D when the fact record itself needs correction.")
+    lines.append("A/B eligibility does not guarantee inclusion. The selection plan ranks eligible items against the JD and page capacity; C/D items remain blocked.")
     lines.append("Semantic Candidates, when present, are review hints only and are not used by the generator.")
     lines.append("")
 
     strong_items, weak_items = _coalesce_display_matches(result.strong_matches, result.weak_matches, project_root)
 
-    lines.append("## Strong Matches")
+    lines.append("## Higher Retrieval Signals (Not Resume Priority)")
     if strong_items:
         for item in strong_items:
             lines.extend(_render_review_item(item, "待确认", project_root))
@@ -185,7 +202,7 @@ def render_review_sheet(
         lines.append("- None")
         lines.append("")
 
-    lines.append("## Weak Matches")
+    lines.append("## Lower Retrieval Signals (Not Resume Priority)")
     if weak_items:
         for item in weak_items:
             lines.extend(_render_review_item(item, "降权", project_root))
@@ -196,7 +213,7 @@ def render_review_sheet(
     if semantic_candidates is not None or semantic_note:
         lines.append("## Semantic Candidates")
         lines.append("")
-        lines.append("These are semantic-only hints for manual triage. They are not A/B/C/D items and cannot enter the resume unless manually promoted into Strong/Weak Matches.")
+        lines.append("These are semantic-only hints for manual triage. They are not A/B/C/D items and cannot enter the resume unless promoted into the main review sections.")
         lines.append("")
         if semantic_note:
             lines.append(f"- Note: {semantic_note}")

@@ -168,16 +168,33 @@ def match_facts_semantic(jd_text: str, facts: Iterable[Fact] | None = None) -> t
 
 def build_recommendations(result: AnalysisResult) -> list[str]:
     recommendations: list[str] = []
+    matched_titles = [match.fact.title for match in [*result.strong_matches, *result.weak_matches]]
+    review_order = ", ".join(dict.fromkeys(matched_titles))
     if result.job_type == "Data application / data engineering":
-        recommendations.append("Use data automation internship as the strongest evidence, but keep internship order chronological in the resume.")
-        recommendations.append("Emphasize REST API, Excel automation, scheduled execution, data quality marking, and Python.")
+        recommendations.append(
+            f"Review the matched evidence in matcher order: {review_order}."
+            if review_order
+            else "No matched evidence is available for ordering; manual review is required."
+        )
     elif result.job_type == "AI application / Agent engineering":
-        recommendations.append("Lead with AI product MVP, Coze/Prompt prototype, model/tool integration, and effect evaluation evidence.")
-        recommendations.append("Use C# multimodal MVP and emotion-pixel evaluation as application-delivery examples.")
+        recommendations.append(
+            f"Review the matched evidence in matcher order: {review_order}."
+            if review_order
+            else "No matched evidence is available for ordering; manual review is required."
+        )
     elif result.job_type == "Algorithm / multimodal research":
-        recommendations.append("Use DL-Learning-Lab and emotion-pixel evaluation, but mark learning-project boundaries clearly.")
+        recommendations.append(
+            f"Review the matched evidence in matcher order: {review_order}."
+            if review_order
+            else "No matched evidence is available for ordering; manual review is required."
+        )
     else:
         recommendations.append("Manual review needed: job type is not strongly identified.")
+
+    recommendations.append(
+        "Matcher order is triage guidance, not final resume selection. "
+        "Only candidate-confirmed A/B items may be included, and the generator must not silently omit them."
+    )
 
     if result.not_writable:
         recommendations.append("Do not include not-writable technologies in resume bullets unless a real project is added first.")
@@ -192,7 +209,10 @@ def build_risks(strong: list[FactMatch], weak: list[FactMatch], not_writable: di
     for tech, reason in not_writable.items():
         risks.append(f"{tech}: not writable. {reason}")
     for match in weak[:3]:
-        risks.append(f"Weak match: {match.fact.title} only matched {', '.join(match.matched_keywords)}.")
+        risks.append(
+            f"Lower retrieval signal: {match.fact.title} only matched {', '.join(match.matched_keywords)}; "
+            "this is not an editorial ranking."
+        )
     return risks
 
 

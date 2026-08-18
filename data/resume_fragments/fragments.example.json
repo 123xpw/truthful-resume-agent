@@ -6,16 +6,40 @@
     "date": "2025",
     "title": "运筹优化算法开发实习生",
     "organization": "示例研究机构",
-    "keywords": "Claude Code, Codex, AI Coding, 任务拆解, 文档核验, Julia",
+    "keywords": "Claude Code, Codex, AI Coding, SCUC, UnitCommitment.jl, 启停轨迹, Minimum uptime, 自动化测试, Julia, subhourly, 算例生成",
     "bullets": {
       "A": [
-        "\\textbf{AI Coding 流程：}用 Claude Code/Codex 辅助复杂代码库检索和文档初稿，采用需求复述、变量定位、人工核验闭环。",
-        "\\textbf{复杂任务拆解：}研读 SCUC 文献并映射 UnitCommitment.jl，整理 21 项约束的公式含义、源码路径和实现差异。",
-        "\\textbf{实验数据处理：}完成 36 到 72 时段 subhourly 转换，区分线性插值/重复填充，并生成 365 天 SCUC 算例库。"
+        "\\textbf{SCUC 模型扩展 MVP：}基于论文将机组启停轨迹约束接入 UnitCommitment.jl，完成机组预处理与 Base/v1/v2 自动化对比测试，并形成可交付验证的完整 MVP。",
+        "\\textbf{论文到代码核验：}完成一组 SCUC 约束的论文公式、代码变量与源码路径对比；使用 Claude Code/Codex 辅助代码定位，并人工核验实现差异。",
+        "\\textbf{算例生成：}实现 subhourly 时段转换，并构建跨天连续的算例生成流程。"
       ],
       "B": [
-        "\\textbf{AI Coding 协作：}用 Claude Code/Codex 辅助复杂代码库检索和文档整理，人工核验公式含义、变量名和源码位置。",
-        "\\textbf{需求拆解记录：}围绕 SCUC 约束复现任务，整理论文公式、代码路径和实现差异，沉淀内部技术文档。"
+        "\\textbf{SCUC 模型扩展 MVP：}在 AI Coding 辅助下完成启停轨迹、机组预处理与 Base/v1/v2 自动化对比测试，并形成可交付验证的 MVP。",
+        "\\textbf{工程核验：}人工核验 SCUC 约束的论文到代码映射，并实现 subhourly 转换与跨天算例生成流程。"
+      ]
+    }
+  },
+  {
+    "fact_id": "intern_optimization_combined",
+    "source_fact_ids": [
+      "intern_optimization_ai_coding",
+      "intern_solver_integration_clarabel"
+    ],
+    "section": "实习经历",
+    "entry_type": "internship",
+    "date": "2025",
+    "title": "运筹优化算法开发实习生",
+    "organization": "示例研究机构",
+    "keywords": "Claude Code, Codex, C++, HiGHS, Clarabel.cpp, SCUC, UnitCommitment.jl, 启停轨迹, Minimum uptime, 自动化测试, subhourly, KKT, 基准测试",
+    "bullets": {
+      "A": [
+        "\\textbf{SCUC 模型扩展 MVP：}在 AI Coding 辅助下将启停轨迹约束接入 UnitCommitment.jl，完成机组预处理与 Base/v1/v2 自动化对比测试，并形成可交付验证的完整 MVP。",
+        "\\textbf{求解器集成 MVP：}将 Clarabel.cpp 接入 HiGHS，打通 LP/QP 数据映射、解回写与 MIP 根节点路由，并实现 KKT 质量门和 simplex 回退。",
+        "\\textbf{算例与基准：}实现 subhourly 时段转换，并通过一组 SCUC 算例验证三种根节点 LP 求解器。"
+      ],
+      "B": [
+        "\\textbf{SCUC 模型扩展 MVP：}在 AI Coding 辅助下完成启停轨迹、机组预处理与 Base/v1/v2 自动化对比测试，并形成可交付验证的 MVP。",
+        "\\textbf{求解器集成 MVP：}完成 Clarabel.cpp 的 LP/QP 数据转换、解回写和 MIP 根节点调用，并通过定向测试与回归检查验证关键路径。"
       ]
     }
   },
@@ -29,12 +53,13 @@
     "keywords": "Python, REST API, 数据处理, 自动化任务, 阿里云",
     "bullets": {
       "A": [
-        "\\textbf{API 数据管道：}基于 IG REST Trading API 拉取指定指数实时数据，完成登录鉴权、数据清洗、均值计算与表格写入。",
-        "\\textbf{自动化任务：}处理多 sheet 报表追加、阶段对比和百分比计算，在阿里云按市场工作日与开市时间定时运行。"
+        "\\textbf{金融数据管道：}基于 Python/REST API 拉取一组市场产品在指定时点的 Close 数据，完成 token 鉴权与刷新、bid/ask 均值计算和失败重试。",
+        "\\textbf{报表自动化：}按多个业务时点更新多张 Excel sheet，计算跨市场派生指标及阶段变化率。",
+        "\\textbf{云端调度：}部署至云端按市场工作日与开市时间定时运行，处理夏冬令时切换与缺失标记，通过日志和邮件反馈日报。"
       ],
       "B": [
-        "\\textbf{数据自动化：}用 Python 对接 IG REST Trading API，拉取指定指数数据并按模板写入多 sheet 报表。",
-        "\\textbf{定时处理：}在阿里云配置脚本定时运行，处理错误/null 标记、阶段对比和百分比计算等表格加工逻辑。"
+        "\\textbf{数据自动化：}用 Python 对接 REST API，拉取指定时间点的 Close 数据并按模板写入多 sheet 报表。",
+        "\\textbf{定时处理：}在云端配置脚本定时运行，通过日志和报告邮件反馈结果，并处理缺失标记、阶段对比和百分比计算。"
       ]
     }
   },
@@ -45,15 +70,33 @@
     "date": "2025",
     "title": "C\\#开发实习生",
     "organization": "示例仓储公司",
-    "keywords": "C\\#, Selenium, 多模态工具调用, Prompt 约束, JSON 结构化输出",
+    "keywords": "C\\#, 对象存储, 多模态接口, Prompt 约束, JSON 结构化输出",
     "bullets": {
       "A": [
-        "\\textbf{多模态工具调用：}使用 C\\# 开发仓储推荐 MVP，通过 Selenium 上传物品图片至豆包页面，并用 Prompt 约束 JSON 输出。",
-        "\\textbf{规则推荐：}基于豆包返回的物品名称、预估尺寸/体积等信息，结合仓型规格推荐存储仓型号。"
+        "\\textbf{多模态识别链路：}基于 ASP.NET Core/C\\# 开发仓储推荐 MVP，将图片上传对象存储后通过浏览器自动化驱动多模态网页会话，并用 Prompt 约束物品和尺寸等 JSON 输出。",
+        "\\textbf{仓型决策规则：}将结构化识别结果接入尺寸、体积与堆叠约束，完成仓型筛选、活体动物拦截、自定义校验和手动输入兜底。"
       ],
       "B": [
-        "\\textbf{仓储推荐 MVP：}使用 C\\# 与 Selenium 搭建图片识别到仓型推荐的演示流程，通过 Prompt 约束豆包输出 JSON。",
-        "\\textbf{规则兜底：}根据返回的物品信息和仓型规格做规则匹配，完成可演示的小规模 MVP。"
+        "\\textbf{仓储推荐 MVP：}使用 C\\# 串联图片上传、多模态结构化识别与仓型推荐，通过 Prompt 约束物品名称、尺寸和可否堆叠等 JSON 输出。",
+        "\\textbf{规则兜底：}根据结构化物品信息和仓型规格做规则匹配，并为识别失败提供手动输入兜底。"
+      ]
+    }
+  },
+  {
+    "fact_id": "intern_solver_integration_clarabel",
+    "section": "实习经历",
+    "entry_type": "internship",
+    "date": "2025",
+    "title": "运筹优化算法开发实习生",
+    "organization": "示例研究机构",
+    "keywords": "C++, HiGHS, Clarabel.cpp, LP/QP, MIP 根节点, KKT, SCUC 基准",
+    "bullets": {
+      "A": [
+        "\\textbf{求解器集成 MVP：}在 AI Coding 工具辅助下，将 Clarabel.cpp 接入 HiGHS 可选 LP/QP 后端，完成数据映射、解回写与 MIP 根节点路由，并加入 KKT 质量门和 simplex 回退。",
+        "\\textbf{实验验证：}编写定向测试与基准脚本，在一组 SCUC 算例上记录不同根节点 LP 求解器的求解时间与 Optimal 状态。"
+      ],
+      "B": [
+        "\\textbf{求解器集成 MVP：}在 AI Coding 工具辅助下，为 HiGHS 实现 Clarabel.cpp 集成 MVP，覆盖 LP/QP 数据转换、解回写和 MIP 根节点调用。"
       ]
     }
   },
@@ -107,7 +150,7 @@
     "section": "项目经历",
     "entry_type": "project_url",
     "date": "2025 - 2026",
-    "title": "Truthful Resume Agent：JD 匹配与受限生成",
+    "title": "Truthful Resume Agent：面向 JD 的真实经历匹配与 RAG 辅助工具",
     "organization": "",
     "url_text": "GitHub: truthful-resume-agent",
     "url": "https://github.com/123xpw/truthful-resume-agent",

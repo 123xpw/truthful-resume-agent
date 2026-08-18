@@ -13,7 +13,7 @@ def render_markdown_report(result: AnalysisResult, jd_path: Path) -> str:
     lines.append(f"- Inferred job type: **{result.job_type}**")
     lines.append("")
 
-    lines.append("## Strong Matches")
+    lines.append("## Higher Retrieval Signals (Not Resume Priority)")
     if result.strong_matches:
         for match in result.strong_matches:
             lines.append(f"- **{match.fact.title}**")
@@ -25,7 +25,7 @@ def render_markdown_report(result: AnalysisResult, jd_path: Path) -> str:
         lines.append("- None")
     lines.append("")
 
-    lines.append("## Weak Matches")
+    lines.append("## Lower Retrieval Signals (Not Resume Priority)")
     if result.weak_matches:
         for match in result.weak_matches:
             lines.append(f"- **{match.fact.title}**: matched {', '.join(match.matched_keywords)}")
@@ -58,7 +58,7 @@ def render_markdown_report(result: AnalysisResult, jd_path: Path) -> str:
     lines.append("- Does each suggested bullet have fact-bank evidence?")
     lines.append("- Does any line imply production, scale, or ownership beyond the fact bank?")
     lines.append("- Can the candidate explain each retained bullet in two minutes?")
-    lines.append("- Should any weak match be downranked or removed?")
+    lines.append("- Does retrieval signal differ from the experience's actual resume value?")
     return "\n".join(lines) + "\n"
 
 

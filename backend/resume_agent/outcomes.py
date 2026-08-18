@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from datetime import date
 import hashlib
 import json
@@ -92,7 +92,7 @@ def record_outcome(
     events.append(event)
     outcome_path.parent.mkdir(parents=True, exist_ok=True)
     outcome_path.write_text(
-        json.dumps([item.__dict__ for item in events], ensure_ascii=False, indent=2),
+        json.dumps([asdict(item) for item in events], ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
     return event

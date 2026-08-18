@@ -15,8 +15,17 @@
     "示例奖项（已脱敏）"
   ],
   "skills": [
-    "AI 工具与应用：Claude Code, Codex, Prompt Engineering",
-    "编程语言：Python",
-    "工程工具：Linux, Git, REST API"
+    {
+      "text": "AI Coding：Claude Code, Codex",
+      "source_fact_ids": ["intern_optimization_ai_coding"]
+    },
+    {
+      "text": "编程语言：Python",
+      "source_fact_ids": ["intern_data_automation"]
+    },
+    {
+      "text": "大模型应用：Prompt Engineering, JSON 结构化输出",
+      "source_fact_ids": ["intern_csharp_ai_mvp"]
+    }
   ]
 }

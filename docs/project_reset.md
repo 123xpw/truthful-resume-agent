@@ -35,6 +35,10 @@ produce interview-risk and preparation output.
    not candidate claims or suggested answers.
 4. **Show experimental wording candidates** — only as visibly untrusted review
    material. They cannot be consumed by resume generation.
+5. **Rank confirmed resume fragment IDs** — choose among source-linked A/B
+   fragments for a target JD and fixed page capacity. The model may return only
+   known fragment IDs; code validates identity, section, and count. Model prose
+   is not consumed by resume generation.
 
 ## Where an LLM is not allowed to help
 
@@ -55,10 +59,11 @@ version:
 > requirements, and simulating an interviewer.
 
 So: do not build "LLM generates the final resume." Build "LLM explains the
-JD while deterministic retrieval, source-linked fragments, and candidate
-confirmation control the resume." Whether something can ultimately be
+JD and may rank already confirmed fragment IDs, while source-linked fragments
+and candidate confirmation control every sentence." Whether something can be
 written stays a decision made by the fact bank plus the candidate's own
-confirmation.
+confirmation; which eligible item fits a specific JD is an editorial selection
+the system should make transparently rather than delegate back to the candidate.
 
 ## Guardrail split (added by Claude, not just a restatement)
 

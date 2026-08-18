@@ -4,11 +4,11 @@
 
 一个基于事实证据的本地 CLI，用于理解职位描述（JD）、召回相关经历，并在人工审核后生成简历草稿。
 
-它不是一个通用的“把简历写得更厉害”的生成器，而是把三个问题分开处理：
+它不是一个通用的“把简历写得更厉害”的生成器。多数 AI 简历工具帮你把措辞写得更漂亮，这个工具反着来：事实库是唯一真值源，LLM 被禁止写简历措辞，每一句话都经过人工确认并可溯源到事实来源。它把三个问题分开处理：
 
 1. 这份 JD 实际需要什么？
 2. 已登记的经历中，哪些能够支撑这些要求？
-3. 哪一种准确措辞是求职者愿意在面试中解释和承担风险的？
+3. 哪一种准确措辞是求职者愿意解释的，Agent 又该如何按 JD 和版面容量选材？
 
 [查看脱敏后的 JD Insight 在线示例](https://123xpw.github.io/truthful-resume-agent/)
 
@@ -23,6 +23,7 @@
 - 在简历生成阶段拒绝待确认、手工伪造确认或已经过期的产物。
 - 输出 Markdown/HTML 分析报告和 LaTeX 简历草稿。
 - 用生成 PDF 的哈希记录真实投递结果，便于后续比较不同版本。
+- 内置 LangChain + LangGraph 对话 Agent，支持工具调用、检索 → 生成 → 校验 → 反思闭环，以及短期（checkpoint）和长期（JSON）记忆。
 
 可选 LLM 只负责解释 JD、生成供人工审阅的面试问题或措辞候选。LLM 输出不能修改事实库、确认记录或最终简历。
 
@@ -65,18 +66,23 @@ data/outputs/alibaba_ai_agent_engineer/jd_insight.html
   --name demo_tencent
 
 .venv/bin/python backend/run_cli.py decide --name demo_tencent
-.venv/bin/python backend/run_cli.py finalize --name demo_tencent
+.venv/bin/python backend/run_cli.py finalize --name demo_tencent --llm-select
 .venv/bin/python backend/run_cli.py status --name demo_tencent
 ```
 
 在 `decide` 阶段，每条匹配经历都会显示两个完整版本：
 
-- `A`：本次投递使用核心版。
-- `B`：本次投递使用保守版。
-- `C`：本次投递不使用这段经历。
+- `A`：核心版事实准确且能解释，允许进入候选池。
+- `B`：只允许保守版进入候选池。
+- `C`：事实基本准确，但目前不愿承担相关追问风险。
 - `D`：底层事实存在错误，需要先修正。
 
-`decide` 要求在真实终端中运行，并拒绝普通管道输入。TTY 检查只是增加自动化绕过成本，不能从密码学上证明一定是真人输入。生成器还会检查待确认项、交互确认标记和过期产物。
+A/B 只确认真实性与可解释边界，不要求求职者判断简历选材。`finalize`
+会在候选池中选择最多 3 段实习和 2 个项目，并写出
+`selection_plan.md`。使用 `--llm-select` 时，模型只能返回已有片段 ID；
+陌生、重复、栏目错误或超量 ID 都会被代码拒绝，模型文本不会进入简历。
+
+`decide` 要求在真实终端中运行，并拒绝普通管道输入。TTY 检查只是增加自动化绕过成本，不能从密码学上证明一定是真人输入。生成器还会检查待确认项、交互确认标记和过期产物。如果 JD、事实库或简历片段在审核后发生变化，审核表本身会失效；`decide`、`generate`、`finalize` 和 `deliver` 都会拒绝继续，直到重新运行 `prepare` 并由候选人再次确认。
 
 编译生成的 TeX 需要 XeLaTeX、latexmk 或 Tectonic。只有 Tectonic 时，可执行 `finalize` 输出的编译命令。
 
@@ -141,12 +147,15 @@ RESUME_AGENT_LLM_MODEL=deepseek-chat
 
 匹配到的 fact ID
    --> 与来源绑定的 A/B 简历片段
-   --> 求职者在终端执行 A/B/C/D 确认
+   --> 求职者确认真实性、可解释范围和追问风险
+   --> 受限选材计划（最多 3 段实习 + 2 个项目）
+   --> 入选/未入选报告
    --> 待确认、确认来源与产物时效检查
    --> LaTeX 简历草稿
 ```
 
-最终简历生成路径是确定性的。JD Insight 中的实验性 LLM 措辞只供审核，`resume_generator.py` 没有读取这些内容的代码路径。
+最终简历措辞仍来自确定性的来源绑定片段。可选 LLM 只排序已确认片段
+ID，不能生成或改写简历句子；JD Insight 中的实验性 LLM 措辞仍只供审核。
 
 ## 经过评测的检索，而不是只展示向量数据库
 
@@ -158,6 +167,7 @@ RESUME_AGENT_LLM_MODEL=deepseek-chat
 
 ```bash
 .venv/bin/python -m backend.resume_agent.eval_matchers
+.venv/bin/python -m backend.resume_agent.rag_eval   # Recall@K 和 MRR
 ```
 
 ## 主要命令
@@ -168,10 +178,12 @@ RESUME_AGENT_LLM_MODEL=deepseek-chat
 | `analyze` | 匹配 JD 并生成确定性报告 |
 | `explain-jd` | 生成可检查的 JD Insight Markdown/HTML |
 | `prepare` | 保存 JD，并创建匹配报告和审核表 |
-| `decide` | 在真实终端中审核完整 A/B 措辞 |
-| `finalize` | 所有审核门通过后生成 TeX |
+| `decide` | 确认完整 A/B 措辞的真实性与可解释边界 |
+| `finalize` | 生成选材报告和 TeX；可选 `--llm-select` |
 | `status` / `list` | 显示待确认、过期、草稿和可导出状态 |
 | `gaps` / `expand-review` | 检查简历覆盖缺口，但不自动登记事实 |
+| `gap-check` | 针对单份 JD 预警缺失证据（终端 + HTML） |
+| `career-trends` | 跨 JD 聚合缺失技术缺口，标记重复出现的项 |
 | `record-outcome` | 记录实际投递状态和 PDF 哈希 |
 
 运行 `python3 backend/run_cli.py --help` 查看全部参数。
@@ -199,6 +211,6 @@ RESUME_AGENT_LLM_MODEL=deepseek-chat
 .venv/bin/python -m backend.resume_agent.eval_matchers
 ```
 
-Smoke test 覆盖待确认阻断、TTY 检查、EOF 恢复、复合事实、过期产物检测、语义候选隔离、无依据技术阻断、投递结果哈希和交付门禁。
+Smoke test 覆盖待确认阻断、TTY 检查、EOF 恢复、复合事实、过期审核/产物检测、语义候选隔离、无依据技术阻断、投递结果哈希和交付门禁。
 
 设计细节与取舍记录在 `docs/technical_design.md`、`docs/risk_policy.md` 和 `docs/evaluation_plan.md`。

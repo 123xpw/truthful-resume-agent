@@ -15,6 +15,7 @@ class ApplicationStatus:
     has_jd: bool
     has_report: bool
     has_review: bool
+    review_fresh: bool
     has_tex: bool
     has_pdf: bool
     tex_fresh: bool
@@ -29,6 +30,8 @@ class ApplicationStatus:
 
 def status_stage(status: ApplicationStatus) -> str:
     if not status.has_jd or not status.has_report or not status.has_review:
+        return "prepare"
+    if not status.review_fresh:
         return "prepare"
     if status.pending_count:
         return "decide"
@@ -49,7 +52,8 @@ def _artifact_label(status: ApplicationStatus, exists: bool, fresh: bool) -> str
     if not exists:
         return "no"
     decisions_ready = (
-        status.pending_count == 0
+        status.review_fresh
+        and status.pending_count == 0
         and status.unverified_accepted_count == 0
         and status.accepted_count > 0
     )
@@ -69,6 +73,24 @@ def _count_pending(review_path: Path) -> int:
     return count_pending_review_items(review_path)
 
 
+def review_dependencies(project_root: Path, jd_path: Path) -> tuple[Path, ...]:
+    facts_private = project_root / "data" / "facts" / "facts.json"
+    facts_example = facts_private.with_name("facts.example.json")
+    fragment_private = project_root / "data" / "resume_fragments" / "fragments.json"
+    fragment_example = fragment_private.with_name("fragments.example.json")
+    return (
+        jd_path,
+        facts_private if facts_private.exists() else facts_example,
+        fragment_private if fragment_private.exists() else fragment_example,
+        Path(__file__).with_name("analyzer.py"),
+        Path(__file__).with_name("review.py"),
+    )
+
+
+def review_is_fresh(project_root: Path, jd_path: Path, review_path: Path) -> bool:
+    return _is_fresh(review_path, review_dependencies(project_root, jd_path))
+
+
 def inspect_application(project_root: Path, name: str) -> ApplicationStatus:
     jd_path = project_root / "data" / "jd_library" / f"{name}.md"
     output_dir = project_root / "data" / "outputs" / name
@@ -81,6 +103,7 @@ def inspect_application(project_root: Path, name: str) -> ApplicationStatus:
     profile_private = project_root / "data" / "profile" / "profile.private.json"
     profile_example = profile_private.with_name("profile.example.json")
     generator_path = Path(__file__).with_name("resume_generator.py")
+    review_fresh = review_is_fresh(project_root, jd_path, review_path)
 
     decisions = parse_review_decisions(review_path) if review_path.exists() else {}
     mastery = parse_review_mastery(review_path) if review_path.exists() else {}
@@ -106,6 +129,7 @@ def inspect_application(project_root: Path, name: str) -> ApplicationStatus:
         if (
             review_path.exists()
             and tex_path.exists()
+            and review_fresh
             and pending_count == 0
             and unverified_accepted_count == 0
             and accepted_count > 0
@@ -117,6 +141,8 @@ def inspect_application(project_root: Path, name: str) -> ApplicationStatus:
 
     if not jd_path.exists() or not report_path.exists() or not review_path.exists():
         next_step = f"prepare: python3 backend/run_cli.py prepare --file <jd> --name {name}"
+    elif not review_fresh:
+        next_step = f"prepare: facts/fragments changed; rebuild review for {name}"
     elif pending_count:
         next_step = f"decide: python3 backend/run_cli.py decide --name {name}"
     elif unverified_accepted_count:
@@ -124,7 +150,7 @@ def inspect_application(project_root: Path, name: str) -> ApplicationStatus:
     elif accepted_count == 0:
         next_step = "blocked: no A/B facts are confirmed, so no resume can be generated"
     elif not tex_path.exists() or not tex_fresh:
-        next_step = f"finalize: python3 backend/run_cli.py finalize --name {name}"
+        next_step = f"finalize: python3 backend/run_cli.py finalize --name {name} --llm-select"
     elif not pdf_path.exists() or not pdf_fresh:
         next_step = f"optional pdf: python3 backend/run_cli.py finalize --name {name} --pdf"
     elif quality and not quality.passed:
@@ -139,6 +165,7 @@ def inspect_application(project_root: Path, name: str) -> ApplicationStatus:
         has_jd=jd_path.exists(),
         has_report=report_path.exists(),
         has_review=review_path.exists(),
+        review_fresh=review_fresh,
         has_tex=tex_path.exists(),
         has_pdf=pdf_path.exists(),
         tex_fresh=tex_fresh,
@@ -175,7 +202,7 @@ def render_status(status: ApplicationStatus) -> str:
         f"Application: {status.name}",
         f"JD saved: {'yes' if status.has_jd else 'no'} ({status.jd_path})",
         f"Match report: {'yes' if status.has_report else 'no'}",
-        f"Review sheet: {'yes' if status.has_review else 'no'}",
+        f"Review sheet: {'yes' if status.has_review and status.review_fresh else 'stale' if status.has_review else 'no'}",
         f"Resume draft tex: {_artifact_label(status, status.has_tex, status.tex_fresh)}",
         f"Resume draft pdf: {_artifact_label(status, status.has_pdf, status.pdf_fresh)}",
         (
@@ -200,7 +227,7 @@ def render_application_list(statuses: list[ApplicationStatus]) -> str:
             status.name,
             status_stage(status),
             status.quality.status if status.quality else "not_checked",
-            "yes" if status.has_review else "no",
+            "yes" if status.has_review and status.review_fresh else "stale" if status.has_review else "no",
             _artifact_label(status, status.has_tex, status.tex_fresh),
             _artifact_label(status, status.has_pdf, status.pdf_fresh),
             (

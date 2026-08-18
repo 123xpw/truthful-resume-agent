@@ -18,7 +18,7 @@ Staleness handling: a sidecar stores the source hash plus embedding model,
 pooling behavior, and dependency versions. Any change rebuilds the local
 collection instead of silently serving incompatible vectors.
 
-Scale note: still ~6 facts. A single local collection is the right size
+Scale note: this is still a single-digit personal fact bank. One local collection is the right size
 for that; sharding/replication/HNSW tuning are not relevant questions at
 this corpus size, and claiming otherwise would be the same overclaim this
 project exists to prevent.

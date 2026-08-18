@@ -14,7 +14,7 @@ Why this model:
 - No API key, no network call at query time: the fact bank is private
   data, and a local model keeps it local.
 
-Why not a bigger model: the corpus is ~6 facts. A larger model would cost
+Why not a bigger model: the corpus is a single-digit personal fact bank. A larger model would cost
 more download/compute for no measurable retrieval-quality gain at this
 scale. This is a scoping decision, not a default.
 """

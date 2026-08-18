@@ -58,11 +58,13 @@ The wording may invite deep technical questions that exceed current mastery. Use
 
 ## Manual Confirmation States
 
-- A: use the displayed core fragment for this application.
-- B: use the displayed conservative fragment for this application.
-- C: omit this experience from this application.
+- A: the displayed core fragment is accurate and explainable; it may enter the selection pool.
+- B: only the displayed conservative fragment is accurate and explainable; it may enter the selection pool.
+- C: the fact is broadly accurate, but the candidate does not currently accept its interview follow-up risk.
 - D: the fact record itself appears wrong and must be corrected before use.
 
-These states choose concrete application wording. They do not prove whether
-an event happened; the candidate-confirmed fact/profile inputs are the trust
-boundary.
+These states set factual and interview-risk eligibility, not final editorial
+selection. The selection planner chooses among A/B items for the target JD and
+page capacity and must report every omitted eligible item. The states do not
+prove whether an event happened; the candidate-confirmed fact/profile inputs
+remain the trust boundary.

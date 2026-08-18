@@ -32,39 +32,41 @@ The MVP should not start with a heavy database. It should use a layered storage 
 These files are the source of truth and remain human-editable:
 
 ```text
-data/private_profile/
-  resume_content_bank.md
-  fact_alignment.md
-  match_matrix.md
+data/profile/
+  profile.private.json        # private (gitignored)
+  profile.example.json        # desensitized template
+
+data/facts/
+  facts.json                  # private (gitignored)
+  facts.example.json          # desensitized template
+
+data/resume_fragments/
+  fragments.json              # private (gitignored)
+  fragments.example.json      # desensitized template
 
 data/jd_library/
-  2026-08-12_tencent_ai_application.md
-  2026-08-12_jd_data_application.md
+  2026-08-12_tencent_ai_application.md   # private (gitignored)
 
 data/outputs/
   tencent_ai_application/
     match_report.md
-    resume_strategy.md
-    risk_review.md
-    resume_content.tex
+    review_sheet.md
+    selection_plan.md
+    resume_draft.tex
+    jd_insight.md
+    jd_insight.html
+    gap_report.md
+    gap_warning.md
+    gap_warning.html
 ```
 
-### SQLite Metadata
+### JSON Metadata
 
-SQLite stores structured metadata for filtering and history:
-
-- companies
-- job_titles
-- job_types
-- JD source path
-- creation time
-- decision status
-- generated output path
-- manual confirmation status
+Application metadata (companies, job titles, job types, JD source path, decision status, generated output path, manual confirmation status) is stored as JSON/plain files under `data/outputs/<application>/`. There is no SQLite database; the MVP keeps everything in human-editable files.
 
 ### Vector Index
 
-Chroma or FAISS stores embeddings for retrieval:
+Qdrant (local) stores embeddings produced by fastembed for retrieval:
 
 - fact chunks
 - project chunks
@@ -87,7 +89,7 @@ For pasted input, the system should:
 1. Extract company and job title when possible.
 2. Generate a stable file name.
 3. Save the raw JD into `data/jd_library/`.
-4. Create metadata in SQLite.
+4. Save metadata to JSON under `data/outputs/<application>/`.
 5. Run analysis on the saved JD.
 
 The raw JD must be preserved. The parsed version is derived data.
@@ -98,14 +100,16 @@ Each retrievable fact chunk should contain:
 
 ```json
 {
-  "id": "internship_jingyan_api_001",
+  "id": "intern_data_automation",
+  "title": "数据自动化开发实习生",
   "source_file": "resume_content_bank.md",
   "source_section": "4.2 Guangzhou Jingyan Data",
-  "fact_type": "internship",
-  "tags": ["Python", "REST API", "Excel automation", "ETL"],
-  "claim": "Built a Python REST API based data automation workflow.",
-  "evidence": "Retrieved selected index data, computed high/low average, wrote multi-sheet Excel reports.",
-  "boundary": "No independent alerting system; no pagination/rate-limit handling.",
+  "summary": "Built a Python REST API based data automation workflow.",
+  "keywords": ["Python", "REST API", "数据处理", "自动化任务", "阿里云"],
+  "boundaries": [
+    "No independent alerting system.",
+    "No pagination; fixed-interval throttling plus 403 retry/token refresh."
+  ],
   "risk": "medium"
 }
 ```
@@ -167,12 +171,21 @@ Every fragment keeps internal trace metadata:
 
 ```json
 {
-  "bullets": {"A": ["Built a Python REST API data workflow..."], "B": ["Implemented part of a Python data workflow..."]},
-  "source_fact_ids": ["internship_jingyan_api_001"],
-  "risk": "medium",
-  "manual_status": "pending"
+  "fact_id": "intern_data_automation",
+  "section": "实习经历",
+  "entry_type": "internship",
+  "date": "2025.10 - 2026.01",
+  "title": "数据自动化开发实习生",
+  "organization": "广州精研数据有限公司",
+  "keywords": "Python, REST API, 数据处理, 自动化任务, 阿里云",
+  "bullets": {
+    "A": ["Built a Python REST API data workflow..."],
+    "B": ["Implemented part of a Python data workflow..."]
+  }
 }
 ```
+
+> 注：复合 fragment（如 `intern_optimization_combined`）额外带 `source_fact_ids` 字段列出其来源 fact；`project_url` 类型的 fragment 额外带 `url_text` / `url` 字段。`entry_type` 取值：`internship` / `project` / `project_url`。
 
 LLM output cannot update facts, fragments, review decisions, or resume files.
 
@@ -180,10 +193,13 @@ LLM output cannot update facts, fragments, review decisions, or resume files.
 
 Each analysis run should produce:
 
-- `match_report.md`
-- `resume_strategy.md`
-- `risk_review.md`
-- optional `resume_content.tex`
+- `match_report.md` — keyword + semantic match results with not-writable warnings
+- `review_sheet.md` — A/B/C/D decision sheet for human-in-the-loop confirmation
+- `selection_plan.md` — LLM-assisted fragment ranking (ID-restricted, capacity-bounded)
+- `resume_draft.tex` — LaTeX resume draft (only after `finalize` passes all gates)
+- `jd_insight.md` / `jd_insight.html` — Tier A (rule-based) + Tier B (LLM) JD analysis
+- `gap_report.md` — unmatched JD requirements with gap classification
+- `gap_warning.md` / `gap_warning.html` — prioritized gap warnings for interview prep
 
 ## Implementation Phases
 

@@ -11,7 +11,7 @@ from .decision_flow import run_interactive_decision
 from .delivery import DeliveryQualityError, deliver_resume
 from .gaps import build_gap_report, expand_review_from_gaps, render_gap_report, write_gap_report
 from .fact_store import load_facts, resolve_facts_path
-from .jd_insight import build_jd_insight_data, render_markdown, write_jd_insight
+from .jd_insight import build_jd_insight_data, render_gap_warning, render_gap_warning_html, render_markdown, write_jd_insight
 from .outcomes import VALID_OUTCOMES, default_outcome_path, load_outcomes, record_outcome, render_outcomes
 from .profile import load_profile
 from .quality import render_quality
@@ -20,7 +20,13 @@ from .resume_generator import generate_resume_tex
 from .fragments import load_fragments
 from .review import render_review_sheet, semantic_only_candidates, write_review_sheet
 from .review_parser import count_pending_review_items, count_unverified_ab_items
-from .status import inspect_application, list_applications, render_application_list, render_status
+from .status import (
+    inspect_application,
+    list_applications,
+    render_application_list,
+    render_status,
+    review_is_fresh,
+)
 from .validate import validate_facts_file
 
 MATCHER_HELP = "Fact matcher to use. Default keyword keeps the original conservative behavior."
@@ -85,6 +91,11 @@ def build_parser() -> argparse.ArgumentParser:
     generate.add_argument("--review", type=Path, help="Path to review_sheet.md. Defaults to data/outputs/<name>/review_sheet.md")
     generate.add_argument("--matcher", choices=["keyword", "semantic"], default="keyword", help=MATCHER_HELP)
     generate.add_argument(
+        "--llm-select",
+        action="store_true",
+        help="Use the configured LLM to rank only confirmed fragment IDs within the 3-internship/2-project limits.",
+    )
+    generate.add_argument(
         "--project-root",
         type=Path,
         default=Path(__file__).resolve().parents[2],
@@ -99,6 +110,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--notes",
         action="store_true",
         help="Also ask free-text explanation questions after each A/B/C/D choice.",
+    )
+    decide.add_argument(
+        "--revisit",
+        action="store_true",
+        help="Revisit every existing A/B/C/D decision; Enter keeps the current choice.",
     )
     decide.add_argument(
         "--project-root",
@@ -137,6 +153,11 @@ def build_parser() -> argparse.ArgumentParser:
     finalize_input.add_argument("--name", help="Name of a saved JD in data/jd_library without .md")
     finalize.add_argument("--review", type=Path, help="Path to review_sheet.md. Defaults to data/outputs/<name>/review_sheet.md")
     finalize.add_argument("--pdf", action="store_true", help="Compile PDF when a supported LaTeX engine is available")
+    finalize.add_argument(
+        "--llm-select",
+        action="store_true",
+        help="Use the configured LLM to rank only confirmed fragment IDs within the 3-internship/2-project limits.",
+    )
     finalize.add_argument(
         "--project-root",
         type=Path,
@@ -215,6 +236,28 @@ def build_parser() -> argparse.ArgumentParser:
     gaps.add_argument("--name", required=True, help="Name of a saved JD/output folder")
     gaps.add_argument("--write", action="store_true", help="Write data/outputs/<name>/gap_report.md")
     gaps.add_argument(
+        "--project-root",
+        type=Path,
+        default=Path(__file__).resolve().parents[2],
+        help="Project root path",
+    )
+
+    gap_check = subparsers.add_parser("gap-check", help="Concise 缺什么预警 for a JD (what to fill / what will be grilled)")
+    gap_check_input = gap_check.add_mutually_exclusive_group(required=True)
+    gap_check_input.add_argument("--file", type=Path, help="Path to a JD markdown/text file")
+    gap_check_input.add_argument("--name", help="Name of a saved JD in data/jd_library without .md")
+    gap_check.add_argument("--matcher", choices=["keyword", "semantic"], default="keyword", help=MATCHER_HELP)
+    gap_check.add_argument("--write", action="store_true", help="Write data/outputs/<name>/gap_warning.md")
+    gap_check.add_argument(
+        "--project-root",
+        type=Path,
+        default=Path(__file__).resolve().parents[2],
+        help="Project root path",
+    )
+
+    career_trends = subparsers.add_parser("career-trends", help="Aggregate 缺什么 across all saved JDs (frequency of unsupported tech)")
+    career_trends.add_argument("--write", action="store_true", help="Write data/evaluation/career_trends.md")
+    career_trends.add_argument(
         "--project-root",
         type=Path,
         default=Path(__file__).resolve().parents[2],
@@ -390,6 +433,16 @@ def run_validate(args: argparse.Namespace) -> int:
                 warnings.append("profile has no awards")
             if not profile.skills:
                 errors.append("profile must contain at least one skill line")
+            for skill in profile.skills:
+                missing_sources = sorted(set(skill.source_fact_ids).difference(fact_ids))
+                if missing_sources:
+                    errors.append(
+                        f"profile skill {skill.text}: unknown source_fact_ids: {', '.join(missing_sources)}"
+                    )
+                if not skill.source_fact_ids:
+                    warnings.append(
+                        f"profile skill omitted from generated resumes until fact-linked: {skill.text}"
+                    )
         except (FileNotFoundError, KeyError, TypeError, ValueError) as exc:
             errors.append(f"structured input validation failed: {exc}")
 
@@ -429,6 +482,10 @@ def run_generate(args: argparse.Namespace) -> int:
         print(f"Review sheet not found: {review_path}", file=sys.stderr)
         print("Run `python3 backend/run_cli.py review --name <name>` first.", file=sys.stderr)
         return 2
+    if not review_is_fresh(project_root, jd_path, review_path):
+        print("Generate failed: review sheet is stale because the JD, facts, or fragments changed.", file=sys.stderr)
+        print(f"Run `python3 backend/run_cli.py prepare --file {jd_path} --name {output_slug}` again.", file=sys.stderr)
+        return 2
     pending_count = count_pending_review_items(review_path)
     if pending_count:
         print(f"Generate failed: review sheet still has {pending_count} pending item(s).", file=sys.stderr)
@@ -451,6 +508,7 @@ def run_generate(args: argparse.Namespace) -> int:
             output_dir=output_dir,
             project_root=project_root,
             matcher=args.matcher,
+            use_llm_selection=args.llm_select,
         )
     except ModuleNotFoundError as exc:
         print(f"Generate failed: missing dependency for {args.matcher} matcher: {exc.name}", file=sys.stderr)
@@ -465,16 +523,27 @@ def run_generate(args: argparse.Namespace) -> int:
 
 def run_decide(args: argparse.Namespace) -> int:
     project_root: Path = args.project_root
-    review_path = args.review or project_root / "data" / "outputs" / slugify(args.name) / "review_sheet.md"
+    output_slug = slugify(args.name)
+    review_path = args.review or project_root / "data" / "outputs" / output_slug / "review_sheet.md"
+    jd_path = project_root / "data" / "jd_library" / f"{output_slug}.md"
     if not review_path.exists():
         print(f"Review sheet not found: {review_path}", file=sys.stderr)
         print("Run `python3 backend/run_cli.py review --name <name>` first.", file=sys.stderr)
+        return 2
+    if not review_is_fresh(project_root, jd_path, review_path):
+        print("Decide failed: review sheet is stale because the JD, facts, or fragments changed.", file=sys.stderr)
+        print(f"Run `python3 backend/run_cli.py prepare --file {jd_path} --name {output_slug}` again.", file=sys.stderr)
         return 2
     if not sys.stdin.isatty():
         print("Decide failed: interactive review requires a real terminal (TTY).", file=sys.stderr)
         print("Do not pipe answers or drive this command through subprocess stdin.", file=sys.stderr)
         return 2
-    return run_interactive_decision(review_path, collect_notes=args.notes, project_root=project_root)
+    return run_interactive_decision(
+        review_path,
+        collect_notes=args.notes,
+        project_root=project_root,
+        revisit_all=args.revisit,
+    )
 
 
 def run_prepare(args: argparse.Namespace) -> int:
@@ -510,7 +579,7 @@ def run_prepare(args: argparse.Namespace) -> int:
     print(f"Report written: {report_path}")
     print(f"Review sheet written: {review_path}")
     print(f"Next: python3 backend/run_cli.py decide --name {output_slug}")
-    print(f"Then: python3 backend/run_cli.py finalize --name {output_slug} --pdf")
+    print(f"Then: python3 backend/run_cli.py finalize --name {output_slug} --llm-select --pdf")
     if result.not_writable:
         print("Not writable:", ", ".join(result.not_writable))
     return 0
@@ -529,6 +598,11 @@ def run_finalize(args: argparse.Namespace) -> int:
     if not review_path.exists():
         print(f"Review sheet not found: {review_path}", file=sys.stderr)
         print(f"Run `python3 backend/run_cli.py prepare --file <jd> --name {output_slug}` first.", file=sys.stderr)
+        return 2
+    jd_path = project_root / "data" / "jd_library" / f"{output_slug}.md" if not args.file else args.file
+    if not review_is_fresh(project_root, jd_path, review_path):
+        print("Finalize failed: review sheet is stale because the JD, facts, or fragments changed.", file=sys.stderr)
+        print(f"Run `python3 backend/run_cli.py prepare --file {jd_path} --name {output_slug}` again.", file=sys.stderr)
         return 2
     pending_count = count_pending_review_items(review_path)
     if pending_count:
@@ -552,6 +626,7 @@ def run_finalize(args: argparse.Namespace) -> int:
             output_dir=output_dir,
             project_root=project_root,
             matcher="keyword",
+            use_llm_selection=args.llm_select,
         )
     except ValueError as exc:
         print(f"Finalize failed: {exc}", file=sys.stderr)
@@ -602,6 +677,11 @@ def run_list_outcomes(args: argparse.Namespace) -> int:
 
 
 def run_deliver(args: argparse.Namespace) -> int:
+    status = inspect_application(args.project_root, slugify(args.name))
+    if not status.review_fresh or not status.tex_fresh or not status.pdf_fresh:
+        print("Deliver failed: review or resume artifacts are stale.", file=sys.stderr)
+        print(f"Next step: {status.next_step}", file=sys.stderr)
+        return 2
     profile = load_profile(args.project_root)
     try:
         result = deliver_resume(
@@ -656,6 +736,93 @@ def run_explain_jd(args: argparse.Namespace) -> int:
         md_path, html_path = write_jd_insight(output_dir, data)
         print(f"\nJD insight report written: {md_path}")
         print(f"JD insight HTML written: {html_path}")
+    return 0
+
+
+def run_gap_check(args: argparse.Namespace) -> int:
+    project_root: Path = args.project_root
+    if args.file:
+        jd_path = args.file
+        jd_text = jd_path.read_text(encoding="utf-8")
+        output_slug = slugify(args.file.stem)
+    else:
+        jd_path = project_root / "data" / "jd_library" / f"{args.name}.md"
+        if not jd_path.exists():
+            print(f"Saved JD not found: {jd_path}", file=sys.stderr)
+            return 2
+        jd_text = jd_path.read_text(encoding="utf-8")
+        output_slug = slugify(args.name)
+
+    try:
+        result = analyze_jd(jd_text, matcher=args.matcher)
+    except ModuleNotFoundError as exc:
+        print(f"gap-check failed: missing dependency for {args.matcher} matcher: {exc.name}", file=sys.stderr)
+        return 2
+
+    data = build_jd_insight_data(jd_path, jd_text, result, use_llm=False)
+    print(render_gap_warning(data))
+    if args.write:
+        output_dir = project_root / "data" / "outputs" / output_slug
+        output_dir.mkdir(parents=True, exist_ok=True)
+        path = output_dir / "gap_warning.md"
+        path.write_text(render_gap_warning(data), encoding="utf-8")
+        html_path = output_dir / "gap_warning.html"
+        html_path.write_text(render_gap_warning_html(data), encoding="utf-8")
+        print(f"\nGap warning written: {path}")
+        print(f"Gap warning HTML written: {html_path}")
+    return 0
+
+
+def run_career_trends(args: argparse.Namespace) -> int:
+    project_root: Path = args.project_root
+    jd_dir = project_root / "data" / "jd_library"
+    jd_paths = sorted(jd_dir.glob("*.md"))
+    if not jd_paths:
+        print(f"No JD files found in {jd_dir}", file=sys.stderr)
+        return 2
+
+    tech_jds: dict[str, set[str]] = {}
+    for jd_path in jd_paths:
+        try:
+            jd_text = jd_path.read_text(encoding="utf-8")
+            result = analyze_jd(jd_text, matcher="keyword")
+            data = build_jd_insight_data(jd_path, jd_text, result, use_llm=False)
+        except Exception as exc:  # skip a broken JD, keep the rest
+            print(f"Skipping {jd_path.name}: {exc}", file=sys.stderr)
+            continue
+        for tech in data.not_writable:
+            tech_jds.setdefault(tech, set()).add(jd_path.stem)
+
+    total = len(jd_paths)
+    ranked = sorted(tech_jds.items(), key=lambda kv: (-len(kv[1]), kv[0]))
+    high = [(t, j) for t, j in ranked if len(j) >= 2]
+    low = [(t, j) for t, j in ranked if len(j) == 1]
+
+    lines = [f"# 跨 JD 缺口预警（共 {total} 份 JD）", ""]
+    lines.append("## 🔴 优先补（≥2 份 JD 提到，事实库无证据）")
+    lines.append("")
+    if high:
+        for tech, jds in high:
+            lines.append(f"- **{tech}**（{len(jds)} 份：{', '.join(sorted(jds))}）")
+    else:
+        lines.append("- 无")
+    lines.append("")
+    lines.append("## 🟡 考虑补（1 份提到）")
+    lines.append("")
+    if low:
+        for tech, jds in low:
+            lines.append(f"- {tech}（{', '.join(sorted(jds))}）")
+    else:
+        lines.append("- 无")
+    lines.append("")
+    report = "\n".join(lines)
+    print(report)
+
+    if args.write:
+        out = project_root / "data" / "evaluation" / "career_trends.md"
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(report, encoding="utf-8")
+        print(f"\nWritten: {out}")
     return 0
 
 
@@ -718,6 +885,10 @@ def main(argv: list[str] | None = None) -> int:
         return run_explain_jd(args)
     if args.command == "gaps":
         return run_gaps(args)
+    if args.command == "gap-check":
+        return run_gap_check(args)
+    if args.command == "career-trends":
+        return run_career_trends(args)
     if args.command == "expand-review":
         return run_expand_review(args)
     parser.error(f"Unknown command: {args.command}")

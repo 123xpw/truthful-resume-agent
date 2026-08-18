@@ -18,7 +18,7 @@ REQUIRED_FIELDS = {
     "risk",
 }
 
-FACT_TYPES = {"education", "internship", "project", "skill", "award"}
+FACT_TYPES = {"internship", "project", "skill"}
 RISK_LEVELS = {"low", "medium", "high"}
 
 

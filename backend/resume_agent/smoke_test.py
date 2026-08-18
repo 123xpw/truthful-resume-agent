@@ -5,13 +5,16 @@ import io
 import os
 from pathlib import Path
 import shutil
+import sys
 import tempfile
 from unittest.mock import patch
 
-from .analyzer import AnalysisResult, FactMatch, merge_keyword_floor
+from .analyzer import AnalysisResult, FactMatch, build_recommendations, merge_keyword_floor
 from .cli import main as cli_main
 from .decision_flow import run_interactive_decision
 from .eval_matchers import score_matches
+from .fact_store import load_facts
+from .fragments import load_fragments
 from .jd_insight import (
     BONUS_HEADING,
     HARD_REQUIREMENT_HEADING,
@@ -24,11 +27,18 @@ from .jd_insight import (
 )
 from .llm_client import LLMNotConfigured, chat_completion, get_api_key
 from .outcomes import default_outcome_path, load_outcomes
-from .profile import load_profile
-from .review_parser import count_pending_review_items, parse_review_mastery
+from .profile import EducationProfile, ResumeProfile, SkillProfile, load_profile
+from .quality import check_resume_quality
+from .review_parser import count_pending_review_items, parse_review_mastery, write_review_state
 from .review import render_review_sheet
+from .resume_generator import (
+    _choose_internship_order,
+    _choose_project_order,
+    _select_profile_skills,
+)
 from .rules import Fact, find_not_writable
 from .semantic.guardrails import find_blocked_terms
+from .selection import build_selection_plan
 from .status import inspect_application, render_status, status_stage
 
 
@@ -39,6 +49,102 @@ SAMPLE_JD = PROJECT_ROOT / "data" / "sample_jds" / "tencent_ai_application.md"
 def _assert(condition: bool, message: str) -> None:
     if not condition:
         raise AssertionError(message)
+
+
+def _assert_internship_composite_selection() -> None:
+    combined = {
+        "intern_optimization_ai_coding",
+        "intern_solver_integration_clarabel",
+        "intern_optimization_combined",
+        "intern_data_automation",
+    }
+    order = _choose_internship_order(combined)
+    _assert(order.count("intern_optimization_combined") == 1, "combined internship was not selected")
+    _assert("intern_optimization_ai_coding" not in order, "combined internship duplicated AI Coding source")
+    _assert("intern_solver_integration_clarabel" not in order, "combined internship duplicated Clarabel source")
+    _assert("intern_data_automation" in order, "unrelated internship was suppressed")
+
+    standalone = _choose_internship_order({"intern_solver_integration_clarabel"})
+    _assert(
+        standalone == ["intern_solver_integration_clarabel"],
+        "standalone Clarabel internship was not selectable",
+    )
+
+
+def _assert_project_selection_does_not_silently_drop_confirmed() -> None:
+    confirmed = {
+        "project_truthful_resume_agent",
+        "project_emotion_pixel_eval",
+        "project_chinese_learning_mvp",
+    }
+    order = _choose_project_order("AI application / Agent engineering", confirmed)
+    _assert(order == [
+        "project_truthful_resume_agent",
+        "project_emotion_pixel_eval",
+        "project_chinese_learning_mvp",
+    ], "AI project ordering silently dropped an A/B-confirmed project")
+
+    facts = [
+        Fact("fact_a", "Matched project A", ("Agent",), "A", (), "low"),
+        Fact("fact_b", "Matched project B", ("RAG",), "B", (), "low"),
+    ]
+    result = AnalysisResult(
+        job_type="AI application / Agent engineering",
+        strong_matches=[FactMatch(facts[0], ["Agent"], "strong")],
+        weak_matches=[FactMatch(facts[1], ["RAG"], "weak")],
+        not_writable={},
+        recommendations=[],
+        risks=[],
+    )
+    recommendations = build_recommendations(result)
+    rendered = "\n".join(recommendations)
+    _assert("Matched project A, Matched project B" in rendered, "recommendations ignored actual matches")
+    _assert("Lead with AI product MVP" not in rendered, "stale fixed strategy text remained")
+
+    future_order = _choose_project_order(
+        "AI application / Agent engineering",
+        {"project_truthful_resume_agent", "project_future"},
+    )
+    _assert(future_order[-1] == "project_future", "new project IDs were silently dropped")
+    _assert(
+        _choose_internship_order({"intern_future"}) == ["intern_future"],
+        "new internship IDs were silently dropped",
+    )
+
+
+def _assert_profile_skills_require_confirmed_fact_sources() -> None:
+    profile = ResumeProfile(
+        name="Candidate",
+        birth="2000年1月",
+        phone="13800000000",
+        email="candidate@example.com",
+        photo_source="",
+        education=EducationProfile(
+            date="2022 - 2026",
+            school="Example University",
+            major="Computer Science",
+            details="GPA redacted",
+        ),
+        awards=(),
+        skills=(
+            SkillProfile("Supported skill", ("fact_a",)),
+            SkillProfile("Unconfirmed skill", ("fact_b",)),
+            SkillProfile("Unlinked skill", ()),
+            SkillProfile("Unknown skill", ("missing_fact",)),
+        ),
+        confirmation="desensitized_sample",
+        source_path=PROJECT_ROOT / "data" / "profile" / "profile.example.json",
+    )
+    included, omitted = _select_profile_skills(
+        profile,
+        mastery={"fact_a": "A", "fact_b": "C"},
+        known_fact_ids={"fact_a", "fact_b"},
+    )
+    _assert([skill.text for skill in included] == ["Supported skill"], "unsupported skill entered resume")
+    omitted_by_text = {skill.text: reason for skill, reason in omitted}
+    _assert("facts not A/B-confirmed" in omitted_by_text["Unconfirmed skill"], "unconfirmed skill omission was not explained")
+    _assert(omitted_by_text["Unlinked skill"] == "no source_fact_ids", "unlinked skill was not identified")
+    _assert("unknown fact IDs" in omitted_by_text["Unknown skill"], "unknown skill source was not rejected")
 
 
 def _copy_required_data(temp_root: Path) -> None:
@@ -61,12 +167,149 @@ def _run_decision_with_input(
     review_path: Path,
     side_effect: list[object],
     project_root: Path | None = None,
+    revisit_all: bool = False,
 ) -> tuple[int, str]:
     stdout = io.StringIO()
     stderr = io.StringIO()
     with redirect_stdout(stdout), redirect_stderr(stderr), patch("builtins.input", side_effect=side_effect):
-        code = run_interactive_decision(review_path, project_root=project_root)
+        code = run_interactive_decision(
+            review_path,
+            project_root=project_root,
+            revisit_all=revisit_all,
+        )
     return code, stdout.getvalue() + stderr.getvalue()
+
+
+def _assert_confirmed_decision_can_be_revisited(temp_root: Path) -> None:
+    review_path = temp_root / "revisit_review.md"
+    review_path.write_text(
+        """# Review
+
+### Existing project choice
+
+- fact_id: `project_chinese_learning_mvp`
+- mastery_check: `A 本轮采用核心版`
+- allowed_resume_intensity: strong
+- confirmed_via: `interactive_cli`
+- confirmed_at: `2000-01-01T00:00:00+00:00`
+""",
+        encoding="utf-8",
+    )
+    code, output = _run_decision_with_input(
+        review_path,
+        ["C"],
+        project_root=temp_root,
+        revisit_all=True,
+    )
+    _assert(code == 0, f"revisit decision failed:\n{output}")
+    _assert("当前选择" in output, "revisit did not show the existing choice")
+    _assert(
+        parse_review_mastery(review_path) == {"project_chinese_learning_mvp": "C"},
+        "revisit did not replace the existing decision",
+    )
+
+
+def _assert_quality_rejects_overfilled_selection(temp_root: Path) -> None:
+    fixture = temp_root / "overfilled"
+    fixture.mkdir(parents=True, exist_ok=True)
+    review_path = fixture / "review_sheet.md"
+    review_path.write_text(
+        "\n".join(
+            f"""### Fact {index}
+- fact_id: `fact_{index}`
+- mastery_check: `A 本轮采用核心版`
+- confirmed_via: `interactive_cli`
+"""
+            for index in range(5)
+        ),
+        encoding="utf-8",
+    )
+    tex_path = fixture / "resume_draft.tex"
+    tex_path.write_text(
+        r"""\section{实习经历}
+\entry{2026}{A}{A}
+\begin{resumeItems}\item one\item two\end{resumeItems}
+\entry{2025}{B}{B}
+\begin{resumeItems}\item three\item four\end{resumeItems}
+\section{项目经历}
+\projectEntry{2026}{P1}{}{}
+\begin{resumeItems}\item five\item six\end{resumeItems}
+\projectEntry{2025}{P2}{}{}
+\begin{resumeItems}\item seven\item eight\end{resumeItems}
+\projectEntry{2024}{P3}{}{}
+\begin{resumeItems}\item nine\item ten\end{resumeItems}
+""",
+        encoding="utf-8",
+    )
+    quality = check_resume_quality(review_path, tex_path)
+    _assert(not quality.passed, "one-page policy accepted three project entries")
+    _assert(
+        any("too many project entries" in reason for reason in quality.reasons),
+        "overfilled selection did not explain how to revise it",
+    )
+
+
+def _assert_selection_is_id_restricted_and_capacity_bounded(temp_root: Path) -> None:
+    fragments = load_fragments(temp_root / "data" / "resume_fragments" / "fragments.json")
+    facts = {fact.id: fact for fact in load_facts(temp_root / "data" / "facts" / "facts.json")}
+    ordered_ids = [
+        "intern_optimization_combined",
+        "intern_data_automation",
+        "intern_csharp_ai_mvp",
+        "project_truthful_resume_agent",
+        "project_emotion_pixel_eval",
+        "project_chinese_learning_mvp",
+    ]
+    selected_levels = {fragment_id: "A" for fragment_id in ordered_ids}
+    result = AnalysisResult(
+        job_type="AI application / Agent engineering",
+        strong_matches=[],
+        weak_matches=[],
+        not_writable={},
+        recommendations=[],
+        risks=[],
+    )
+    valid_response = """{
+      "selected_fragment_ids": [
+        "intern_optimization_combined",
+        "intern_data_automation",
+        "intern_csharp_ai_mvp",
+        "project_truthful_resume_agent",
+        "project_emotion_pixel_eval"
+      ]
+    }"""
+    with patch("backend.resume_agent.selection.chat_completion", return_value=valid_response):
+        plan = build_selection_plan(
+            "JD",
+            ordered_ids,
+            selected_levels,
+            fragments,
+            facts,
+            result,
+            use_llm=True,
+        )
+    _assert(len(plan.selected_ids) == 5, "restricted selection did not choose the 3+2 capacity")
+    _assert(
+        plan.omitted_ids == ("project_chinese_learning_mvp",),
+        "restricted selection did not disclose the omitted eligible project",
+    )
+
+    invalid_response = '{"selected_fragment_ids":["fabricated_fragment"]}'
+    with patch("backend.resume_agent.selection.chat_completion", return_value=invalid_response):
+        try:
+            build_selection_plan(
+                "JD",
+                ordered_ids,
+                selected_levels,
+                fragments,
+                facts,
+                result,
+                use_llm=True,
+            )
+        except ValueError as exc:
+            _assert("unknown fragment IDs" in str(exc), "unknown selection ID failed for the wrong reason")
+        else:
+            raise AssertionError("LLM selection accepted a fabricated fragment ID")
 
 
 def _confirm_all_pending_as_b(review_path: Path) -> None:
@@ -80,6 +323,10 @@ def _confirm_all_pending_as_b(review_path: Path) -> None:
         "- allowed_resume_intensity: conservative\n- confirmed_via: `interactive_cli`\n- confirmed_at: `2000-01-01T00:00:00+00:00`",
     )
     review_path.write_text(text, encoding="utf-8")
+    # Sync the JSON sidecar so parse_review_decisions reads the updated state.
+    state_path = review_path.with_suffix(".state.json")
+    if state_path.exists():
+        write_review_state(review_path)
 
 
 def _assert_semantic_candidates_are_not_mastery_items(temp_root: Path) -> None:
@@ -276,10 +523,42 @@ def _assert_review_renders_composite_across_match_levels() -> None:
         project_root=PROJECT_ROOT,
     )
     _assert(review.count("display_fact_id: `project_truthful_resume_agent`") == 1, "composite display block missing")
-    _assert(review.count("Truthful Resume Agent：JD 匹配与受限生成") == 1, "composite project rendered more than once")
+    _assert(
+        review.count("Truthful Resume Agent：面向 JD 的真实经历匹配与 RAG 辅助工具") == 1,
+        "composite project rendered more than once",
+    )
     _assert(review.count("- fact_id: `project_truthful_resume_agent_cli`") == 1, "CLI source fact missing")
     _assert(review.count("- fact_id: `project_truthful_resume_agent_rag_qdrant`") == 1, "RAG source fact missing")
     _assert(review.count("- mastery_check: `待确认`") == 1, "composite strong/weak split should ask once")
+
+
+def _assert_review_expands_partially_matched_composite() -> None:
+    facts = {
+        fact.id: fact
+        for fact in load_facts(PROJECT_ROOT / "data" / "facts" / "facts.json")
+    }
+    review = render_review_sheet(
+        AnalysisResult(
+            job_type="AI application / Agent engineering",
+            strong_matches=[],
+            weak_matches=[
+                FactMatch(
+                    fact=facts["intern_optimization_ai_coding"],
+                    matched_keywords=["Claude Code"],
+                    level="weak",
+                )
+            ],
+            not_writable={},
+            recommendations=[],
+            risks=[],
+        ),
+        jd_path=PROJECT_ROOT / "data" / "sample_jds" / "ai_agent_engineer.md",
+        project_root=PROJECT_ROOT,
+    )
+    _assert(review.count("display_fact_id: `intern_optimization_combined`") == 1, "partial composite was not coalesced")
+    _assert(review.count("- fact_id: `intern_optimization_ai_coding`") == 1, "matched composite source missing")
+    _assert(review.count("- fact_id: `intern_solver_integration_clarabel`") == 1, "unmatched composite source was not included for review")
+    _assert(review.count("- mastery_check: `降权`") == 1, "partial composite should still ask once")
 
 
 def _sample_fact_match() -> FactMatch:
@@ -485,6 +764,51 @@ def _assert_status_rejects_stale_artifacts(temp_root: Path) -> None:
     _assert("Resume draft tex: stale" in render_status(status), "stale TeX label was not visible")
 
 
+def _assert_fact_changes_stale_review(temp_root: Path) -> None:
+    name = "stale_review_smoke"
+    jd_path = temp_root / "data" / "jd_library" / f"{name}.md"
+    output_dir = temp_root / "data" / "outputs" / name
+    jd_path.parent.mkdir(parents=True, exist_ok=True)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    jd_path.write_text("# JD\nPython", encoding="utf-8")
+    (output_dir / "match_report.md").write_text("# Match", encoding="utf-8")
+    review_path = output_dir / "review_sheet.md"
+    review_path.write_text(
+        """# Review
+- fact_id: `intern_data_automation`
+- mastery_check: `A smoke confirmed`
+- confirmed_via: `interactive_cli`
+- confirmed_at: `2000-01-01T00:00:00+00:00`
+""",
+        encoding="utf-8",
+    )
+    review_time = max(
+        path.stat().st_mtime_ns
+        for path in (
+            jd_path,
+            temp_root / "data" / "facts" / "facts.json",
+            temp_root / "data" / "resume_fragments" / "fragments.json",
+        )
+    ) + 10_000_000
+    os.utime(review_path, ns=(review_time, review_time))
+    status = inspect_application(temp_root, name)
+    _assert(status.review_fresh, "new review was unexpectedly stale")
+
+    facts_path = temp_root / "data" / "facts" / "facts.json"
+    original_facts_mtime = facts_path.stat().st_mtime_ns
+    os.utime(facts_path, ns=(review_time + 10_000_000, review_time + 10_000_000))
+    stale = inspect_application(temp_root, name)
+    _assert(not stale.review_fresh, "fact change did not stale the review")
+    _assert(status_stage(stale) == "prepare", "stale review did not return workflow to prepare")
+    _assert("Review sheet: stale" in render_status(stale), "stale review label was not visible")
+    finalize_code, finalize_output = _run_cli(
+        ["finalize", "--name", name, "--project-root", str(temp_root)]
+    )
+    _assert(finalize_code == 2, "finalize accepted a stale review")
+    _assert("review sheet is stale" in finalize_output, "finalize did not explain stale-review rejection")
+    os.utime(facts_path, ns=(original_facts_mtime, original_facts_mtime))
+
+
 def _write_deliverable_fixture(temp_root: Path) -> None:
     output_dir = temp_root / "data" / "outputs" / "deliverable_smoke"
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -597,6 +921,12 @@ def run_smoke() -> None:
         temp_root = Path(raw_temp)
         _copy_required_data(temp_root)
 
+        _assert_internship_composite_selection()
+        _assert_project_selection_does_not_silently_drop_confirmed()
+        _assert_profile_skills_require_confirmed_fact_sources()
+        _assert_confirmed_decision_can_be_revisited(temp_root)
+        _assert_quality_rejects_overfilled_selection(temp_root)
+        _assert_selection_is_id_restricted_and_capacity_bounded(temp_root)
         _assert_jd_insight_structural_extraction()
         _assert_jd_insight_not_writable_classification()
         _assert_not_writable_terms_are_evidence_checks()
@@ -604,12 +934,14 @@ def run_smoke() -> None:
         _assert_matcher_metrics_count_false_positives()
         _assert_review_parser_supports_composite_fact_blocks(temp_root)
         _assert_review_renders_composite_across_match_levels()
+        _assert_review_expands_partially_matched_composite()
         _assert_llm_phrasing_candidates_are_advisory_and_screened()
         _assert_llm_interview_followups_only_render_questions()
         _assert_llm_phrasing_boundary_screen_fails_closed()
         _assert_llm_not_configured_degrades(temp_root)
         _assert_llm_provider_is_configurable()
         _assert_status_rejects_stale_artifacts(temp_root)
+        _assert_fact_changes_stale_review(temp_root)
 
         prepare_code, prepare_output = _run_cli(
             [
@@ -698,15 +1030,16 @@ def run_smoke() -> None:
         )
         _assert(pending_finalize_code == 2, "finalize should reject an unconfirmed review sheet")
 
-        non_tty_decide_code, non_tty_decide_output = _run_cli(
-            [
-                "decide",
-                "--name",
-                "smoke_tencent",
-                "--project-root",
-                str(temp_root),
-            ]
-        )
+        with patch("sys.stdin.isatty", return_value=False):
+            non_tty_decide_code, non_tty_decide_output = _run_cli(
+                [
+                    "decide",
+                    "--name",
+                    "smoke_tencent",
+                    "--project-root",
+                    str(temp_root),
+                ]
+            )
         _assert(non_tty_decide_code == 2, "CLI decide should reject non-TTY stdin")
         _assert("requires a real terminal" in non_tty_decide_output, "CLI decide did not explain the TTY requirement")
 
@@ -734,6 +1067,10 @@ def run_smoke() -> None:
             "resumed decide repeated an already confirmed fact",
         )
         review_path.write_text(original_review, encoding="utf-8")
+        # Remove stale sidecar so parse_review_decisions reads the restored markdown.
+        state_path = review_path.with_suffix(".state.json")
+        if state_path.exists():
+            state_path.unlink()
 
         _confirm_all_pending_as_b(review_path)
         mastery = parse_review_mastery(review_path)
@@ -756,8 +1093,18 @@ def run_smoke() -> None:
         tex_path = output_dir / "resume_draft.tex"
         _assert(tex_path.exists(), "finalize did not write resume_draft.tex")
         tex_text = tex_path.read_text(encoding="utf-8")
-        _assert("RAG" not in tex_text, "not-writable RAG leaked into generated resume")
-        _assert("vector database" not in tex_text, "not-writable vector database leaked into generated resume")
+        _assert("LangChain" not in tex_text, "not-writable LangChain leaked into generated resume")
+        _assert("MCP" not in tex_text, "not-writable MCP leaked into generated resume")
+        _assert(
+            "补充技能：Java, MySQL, PostgreSQL" not in tex_text,
+            "unlinked profile skills leaked into generated resume",
+        )
+        selection_text = (output_dir / "selection_plan.md").read_text(encoding="utf-8")
+        _assert("## Profile Skills" in selection_text, "selection plan omitted the profile-skill audit")
+        _assert(
+            "补充技能：Java, MySQL, PostgreSQL: no source_fact_ids" in selection_text,
+            "selection plan did not explain the unlinked skill omission",
+        )
 
         final_status_code, final_status_output = _run_cli(
             [
@@ -828,11 +1175,39 @@ def run_smoke() -> None:
             ]
         )
         _assert(expand_code == 0, f"expand-review command failed:\n{expand_output}")
-        _assert("Gap candidates added: 3" in expand_output, "expand-review did not append all gap candidates")
+        added_line = next(
+            (line for line in expand_output.splitlines() if line.startswith("Added fact_ids:")),
+            "",
+        )
+        added_ids = {
+            fact_id.strip()
+            for fact_id in added_line.removeprefix("Added fact_ids:").split(",")
+            if fact_id.strip()
+        }
+        expected_gap_ids = {
+            "intern_data_automation",
+            "intern_csharp_ai_mvp",
+            "project_dl_learning_lab",
+        }
+        _assert(
+            added_ids == expected_gap_ids,
+            f"expand-review added unexpected gap candidates: {sorted(added_ids)}",
+        )
         expanded_review = review_path.read_text(encoding="utf-8")
+        _assert(
+            "display_fact_id: `intern_optimization_combined`" in expanded_review,
+            "partially matched South Grid composite was not already present before gap expansion",
+        )
+        _assert(
+            expanded_review.count("fact_id: `intern_solver_integration_clarabel`") == 1,
+            "Clarabel source should appear once inside the combined South Grid review block",
+        )
         _assert("## Gap Review Candidates" in expanded_review, "expand-review did not add review section")
         _assert("fact_id: `intern_data_automation`" in expanded_review, "expand-review missed data automation candidate")
-        _assert(count_pending_review_items(review_path) == 3, "expand-review did not create pending review items")
+        _assert(
+            count_pending_review_items(review_path) == len(expected_gap_ids),
+            "expand-review did not create all pending review items",
+        )
 
         pending_gap_finalize_code, pending_gap_finalize_output = _run_cli(
             [
@@ -959,7 +1334,7 @@ def run_smoke() -> None:
             "composite source facts should render as one project entry",
         )
         _assert(
-            "Truthful Resume Agent：JD 匹配与受限生成" in composite_tex,
+            "Truthful Resume Agent：面向 JD 的真实经历匹配与 RAG 辅助工具" in composite_tex,
             "composite project title missing from generated resume",
         )
 
@@ -1006,8 +1381,18 @@ def run_smoke() -> None:
         )
 
 
+def _run_agent_tests() -> None:
+    try:
+        from .agent.test_agent import run_all as run_agent_tests
+
+        run_agent_tests()
+    except ImportError:
+        print("跳过 agent 测试（langchain 未安装）")
+
+
 def main() -> int:
     run_smoke()
+    _run_agent_tests()
     print("Smoke test passed.")
     return 0
 

@@ -322,6 +322,153 @@ def build_jd_insight_data(jd_path: Path, jd_text: str, result: AnalysisResult, u
     )
 
 
+def render_gap_warning(data: JDInsightData) -> str:
+    """Concise '缺什么预警' view: what the fact bank lacks and which matched
+    facts are high-risk for follow-up questions."""
+    lines = ["# 缺什么预警（面试备战）", ""]
+    lines.append(f"- JD: `{data.jd_path}`")
+    lines.append(f"- 岗位类型: **{data.job_type}**")
+    lines.append("")
+
+    lines.append("## 📌 缺证据（JD 要但你事实库没有 → 别写，或补项目）")
+    lines.append("")
+    if data.not_writable:
+        for tech, reason in data.not_writable.items():
+            tier = data.not_writable_tiers.get(tech, "")
+            tier_label = f"（{tier}）" if tier else ""
+            lines.append(f"- **{tech}**{tier_label}: {reason}")
+    else:
+        lines.append("- 无")
+    lines.append("")
+
+    matches = [*data.strong_matches, *data.weak_matches]
+    high_risk = [m for m in matches if m.fact.risk == "high"]
+    low_risk = [m for m in matches if m.fact.risk == "low"]
+    mid_risk = [m for m in matches if m.fact.risk not in {"high", "low"}]
+
+    lines.append("## ⚠️ 会被深挖（有事实但风险高 → 准备拷打问题）")
+    lines.append("")
+    if high_risk:
+        for m in high_risk:
+            lines.append(f"- {m.fact.title}（`{m.fact.id}`）")
+    else:
+        lines.append("- 无")
+    lines.append("")
+
+    lines.append("## 🔶 中风险（能答但要注意边界）")
+    lines.append("")
+    if mid_risk:
+        for m in mid_risk:
+            lines.append(f"- {m.fact.title}（`{m.fact.id}`）")
+    else:
+        lines.append("- 无")
+    lines.append("")
+
+    lines.append("## ✅ 稳的（能答清）")
+    lines.append("")
+    if low_risk:
+        for m in low_risk:
+            lines.append(f"- {m.fact.title}（`{m.fact.id}`）")
+    else:
+        lines.append("- 无")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def render_gap_warning_html(data: JDInsightData) -> str:
+    """Self-contained HTML dashboard for the concise gap warning."""
+    matches = [*data.strong_matches, *data.weak_matches]
+    high = [m for m in matches if m.fact.risk == "high"]
+    mid = [m for m in matches if m.fact.risk not in {"high", "low"}]
+    low = [m for m in matches if m.fact.risk == "low"]
+
+    def esc(s: str) -> str:
+        return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+    def fact_items(items) -> str:
+        if not items:
+            return '<li class="empty">无</li>'
+        return "".join(
+            f"<li><b>{esc(m.fact.title)}</b><code>{esc(m.fact.id)}</code></li>" for m in items
+        )
+
+    nw_items = "".join(
+        f'<li><b>{esc(tech)}</b><span class="tag">{esc(data.not_writable_tiers.get(tech, ""))}</span>'
+        f'<p>{esc(reason)}</p></li>'
+        for tech, reason in data.not_writable.items()
+    ) or '<li class="empty">无</li>'
+
+    return f"""<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>缺什么预警 · {esc(data.job_type)}</title>
+<style>
+  * {{ box-sizing: border-box; }}
+  body {{ margin: 0; font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+         background: #f6f8fa; color: #1f2328; line-height: 1.6; }}
+  .wrap {{ max-width: 900px; margin: 0 auto; padding: 28px 18px 60px; }}
+  header {{ background: #2f5597; color: #fff; padding: 22px 26px; border-radius: 12px; margin-bottom: 18px; }}
+  header h1 {{ margin: 0 0 6px; font-size: 22px; }}
+  header p {{ margin: 0; opacity: .9; font-size: 14px; }}
+  .grid {{ display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }}
+  @media (max-width: 640px) {{ .grid {{ grid-template-columns: 1fr; }} }}
+  .card {{ background: #fff; border: 1px solid #d8dee4; border-radius: 10px; padding: 16px 18px; }}
+  .card h2 {{ margin: 0 0 10px; font-size: 16px; display: flex; align-items: center; gap: 6px; }}
+  .card.red {{ border-top: 4px solid #d1242f; }}
+  .card.yellow {{ border-top: 4px solid #bf8700; }}
+  .card.orange {{ border-top: 4px solid #bc4c00; }}
+  .card.green {{ border-top: 4px solid #1a7f37; }}
+  ul {{ margin: 0; padding-left: 20px; }}
+  li {{ margin: 6px 0; font-size: 14px; }}
+  li.empty {{ color: #8b949e; list-style: none; margin-left: -20px; }}
+  code {{ font-family: ui-monospace, Menlo, monospace; font-size: 12px; background: #f0f3f6;
+         padding: 1px 6px; border-radius: 4px; margin-left: 6px; color: #57606a; }}
+  .tag {{ display: inline-block; font-size: 11px; font-weight: 600; padding: 0 7px;
+         border-radius: 9px; margin-left: 6px; background: #eaeef2; color: #57606a; }}
+  .card.red .tag {{ background: #ffebe9; color: #d1242f; }}
+  .card.yellow .tag {{ background: #fff8e1; color: #9a6700; }}
+  p {{ margin: 2px 0 0; font-size: 13px; color: #57606a; }}
+  footer {{ margin-top: 18px; background: #fff; border: 1px solid #d8dee4; border-radius: 10px;
+           padding: 14px 18px; font-size: 13px; color: #57606a; }}
+  footer a {{ color: #2f5597; }}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <h1>缺什么预警（面试备战）</h1>
+  <p>岗位类型：<b>{esc(data.job_type)}</b> · JD: <code>{esc(str(data.jd_path))}</code></p>
+</header>
+
+<div class="grid">
+  <div class="card red">
+    <h2>🔴 缺证据（别写，或补项目）</h2>
+    <ul>{nw_items}</ul>
+  </div>
+  <div class="card yellow">
+    <h2>🟡 会被深挖（准备拷打问题）</h2>
+    <ul>{fact_items(high)}</ul>
+  </div>
+  <div class="card orange">
+    <h2>🟠 中风险（注意边界）</h2>
+    <ul>{fact_items(mid)}</ul>
+  </div>
+  <div class="card green">
+    <h2>🟢 稳的（能答清）</h2>
+    <ul>{fact_items(low)}</ul>
+  </div>
+</div>
+
+<footer>
+  拷打问题见 <code>interview_grill.md</code>（项目根目录）。本页为本地私有视图，数据来源于事实库事实与 JD 匹配结果。
+</footer>
+</div>
+</body>
+</html>"""
+
+
 def render_markdown(data: JDInsightData) -> str:
     lines: list[str] = [
         "# JD Insight Report",

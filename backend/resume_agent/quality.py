@@ -85,8 +85,18 @@ def check_resume_quality(review_path: Path, tex_path: Path, pdf_path: Path | Non
         reasons.append("no interactively confirmed A-level facts")
     if internship_entries < 2:
         reasons.append(f"too few internship entries: {internship_entries} < 2")
+    if internship_entries > 3:
+        reasons.append(
+            f"too many internship entries for the one-page policy: {internship_entries} > 3; "
+            "revisit the application decisions and mark omitted items C"
+        )
     if project_entries < 2:
         reasons.append(f"too few project entries: {project_entries} < 2")
+    if project_entries > 2:
+        reasons.append(
+            f"too many project entries for the one-page policy: {project_entries} > 2; "
+            "run decide --revisit and mark the project omitted from this application as C"
+        )
     if professional_entries < 4:
         reasons.append(f"too few professional entries: {professional_entries} < 4")
     if professional_bullets < 8:
