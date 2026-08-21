@@ -3,16 +3,13 @@ from __future__ import annotations
 from pathlib import Path
 
 from .analyzer import AnalysisResult, FactMatch
+from .authorization_store import AUTHORIZATION_OPTIONS
 from .fact_store import load_facts
 from .fragments import ResumeFragment, load_fragments
+from .review_parser import write_review_state
 
 
-MASTERY_OPTIONS = (
-    "A 事实准确且能解释核心版，允许进入候选池 / "
-    "B 事实准确但只允许保守版进入候选池 / "
-    "C 事实基本准确但目前不愿承担追问风险 / "
-    "D 事实记录有误，需要回查事实库"
-)
+MASTERY_OPTIONS = AUTHORIZATION_OPTIONS
 
 
 def _render_match_block(match: FactMatch, default_decision: str) -> list[str]:
@@ -28,8 +25,8 @@ def _render_match_block(match: FactMatch, default_decision: str) -> list[str]:
     lines.append("")
     lines.append(f"- mastery_check: `{default_decision}`")
     lines.append(f"- allowed_options: {MASTERY_OPTIONS}")
-    lines.append("- what_i_can_explain: ")
-    lines.append("- what_i_cannot_explain_yet: ")
+    lines.append("- authorization_note: ")
+    lines.append("- correction_or_boundary_note: ")
     lines.append("- allowed_resume_intensity: ")
     lines.append("")
     return lines
@@ -66,8 +63,8 @@ def _render_composite_match_block(
     lines.append("")
     lines.append(f"- mastery_check: `{default_decision}`")
     lines.append(f"- allowed_options: {MASTERY_OPTIONS}")
-    lines.append("- what_i_can_explain: ")
-    lines.append("- what_i_cannot_explain_yet: ")
+    lines.append("- authorization_note: ")
+    lines.append("- correction_or_boundary_note: ")
     lines.append("- allowed_resume_intensity: ")
     lines.append("")
     return lines
@@ -182,12 +179,13 @@ def render_review_sheet(
     lines.append("")
     lines.append("For each fact below, answer only one practical question:")
     lines.append("")
-    lines.append("Which wording remains truthful and explainable if an interviewer follows up?")
+    lines.append("Which wording is factually accurate and authorized for resume screening?")
     lines.append("")
     lines.append(f"`{MASTERY_OPTIONS}`")
     lines.append("")
-    lines.append("The fact bank records candidate-confirmed experience. This review sets the strongest wording allowed into the candidate pool.")
-    lines.append("Use A when the core fragment is accurate and explainable, B when only the conservative fragment is safe, C when the fact is broadly accurate but you do not want its interview risk, and D when the fact record itself needs correction.")
+    lines.append("The fact bank records candidate-confirmed experience. This review grants reusable resume-wording authorization; it is not an interview-readiness test.")
+    lines.append("Use A when the core fragment is accurate, B when only the conservative fragment is authorized, C when the fact is broadly accurate but should stay off the resume, and D when the fact record itself needs correction.")
+    lines.append("An unchanged authorization is reused across applications. A fact or fragment content change requires a new confirmation.")
     lines.append("A/B eligibility does not guarantee inclusion. The selection plan ranks eligible items against the JD and page capacity; C/D items remain blocked.")
     lines.append("Semantic Candidates, when present, are review hints only and are not used by the generator.")
     lines.append("")
@@ -243,7 +241,7 @@ def render_review_sheet(
         lines.append(f"- {item}")
     lines.append("")
 
-    lines.append("## Interview Preparation")
+    lines.append("## Optional Interview Preparation")
     if result.risks:
         for risk in result.risks:
             lines.append(f"- {risk}")
@@ -257,4 +255,7 @@ def write_review_sheet(review: str, output_dir: Path) -> Path:
     output_dir.mkdir(parents=True, exist_ok=True)
     review_path = output_dir / "review_sheet.md"
     review_path.write_text(review, encoding="utf-8")
+    # Reset the machine-readable sidecar whenever a review is rebuilt so
+    # decisions from an older review cannot leak into the new application state.
+    write_review_state(review_path)
     return review_path

@@ -75,10 +75,28 @@ def _classify_not_writable(
     collapsing them into one hedge ("if this is a hard requirement or bonus
     point...") was the exact vagueness that made section 7 hard to act on.
     """
+    alternative_markers = ("至少一门", "至少一种", "任意一门", "任意一种", "任一", "one of")
+
+    def is_optional_alternative(line: str, tech: str) -> bool:
+        if not contains_keyword(line, tech):
+            return False
+        lowered = line.lower()
+        if any(marker in lowered for marker in alternative_markers):
+            return True
+        return bool(
+            re.search(rf"{re.escape(tech)}[^。；;]*优先", line, flags=re.IGNORECASE)
+            or re.search(rf"优先[^。；;]*{re.escape(tech)}", line, flags=re.IGNORECASE)
+        )
+
     classification: dict[str, str] = {}
     for tech in not_writable:
-        in_hard = any(contains_keyword(line, tech) for line in hard_requirements)
-        in_bonus = any(contains_keyword(line, tech) for line in bonus_points)
+        in_hard = any(
+            contains_keyword(line, tech) and not is_optional_alternative(line, tech)
+            for line in hard_requirements
+        )
+        in_bonus = any(contains_keyword(line, tech) for line in bonus_points) or any(
+            is_optional_alternative(line, tech) for line in hard_requirements
+        )
         if in_hard and in_bonus:
             classification[tech] = "both"
         elif in_hard:

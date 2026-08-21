@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import re
 
 from .analyzer import MatcherName, analyze_jd
 from .fact_store import load_facts
@@ -140,8 +141,9 @@ FORMAT_SUFFIX = r"""% ==================== 内容区结束：定制简历时只�
 
 from .layout_config import (
     COMPOSITE_INTERNSHIP_SOURCES,
-    INTERNSHIP_ORDER,
-    PROJECT_ORDER_BY_JOB_TYPE,
+    INTERNSHIP_EXCLUSIVE_GROUPS,
+    resolve_internship_order,
+    resolve_project_order,
 )
 
 
@@ -157,6 +159,11 @@ def _latex_escape(value: str) -> str:
         "}": r"\}",
     }
     return "".join(replacements.get(char, char) for char in value)
+
+
+def _escape_unescaped_percent(value: str) -> str:
+    """Preserve fragment LaTeX while preventing bare percent signs from commenting out text."""
+    return re.sub(r"(?<!\\)%", r"\\%", value)
 
 
 def _fragment_level(fragment: ResumeFragment, mastery: dict[str, str]) -> str | None:
@@ -226,27 +233,32 @@ def _section_entry(fragment: ResumeFragment, level: str) -> str:
 
     lines.append("\\begin{resumeItems}")
     for bullet in fragment.bullets[level]:
-        lines.append(f"  \\item {bullet}")
+        lines.append(f"  \\item {_escape_unescaped_percent(bullet)}")
     lines.append("\\end{resumeItems}")
     if fragment.keywords:
         lines.append(f"\\keywords{{{fragment.keywords}}}")
     return "\n".join(lines)
 
 
-def _choose_project_order(job_type: str, selected_ids: set[str]) -> list[str]:
-    order = PROJECT_ORDER_BY_JOB_TYPE.get(job_type, PROJECT_ORDER_BY_JOB_TYPE["default"])
+def _choose_project_order(job_type: str, selected_ids: set[str], fragments: dict[str, ResumeFragment]) -> list[str]:
+    order = resolve_project_order(job_type, fragments)
     preferred = [fact_id for fact_id in order if fact_id in selected_ids]
     return [*preferred, *sorted(selected_ids - set(preferred))]
 
 
-def _choose_internship_order(selected_ids: set[str]) -> list[str]:
+def _choose_internship_order(selected_ids: set[str], fragments: dict[str, ResumeFragment]) -> list[str]:
     suppressed_sources: set[str] = set()
     for composite_id, source_ids in COMPOSITE_INTERNSHIP_SOURCES.items():
         if composite_id in selected_ids:
             suppressed_sources.update(source_ids)
+    for group in INTERNSHIP_EXCLUSIVE_GROUPS:
+        selected_group = [fact_id for fact_id in group if fact_id in selected_ids]
+        if selected_group:
+            suppressed_sources.update(selected_group[1:])
+    order = resolve_internship_order(fragments)
     preferred = [
         fact_id
-        for fact_id in INTERNSHIP_ORDER
+        for fact_id in order
         if fact_id in selected_ids and fact_id not in suppressed_sources
     ]
     remaining = selected_ids - set(preferred) - suppressed_sources
@@ -278,11 +290,11 @@ def generate_resume_tex(
     internship_ids = {
         fact_id for fact_id in selected_levels if fragments[fact_id].section == "实习经历"
     }
-    eligible_internships = _choose_internship_order(internship_ids)
+    eligible_internships = _choose_internship_order(internship_ids, fragments)
     project_ids = {
         fact_id for fact_id in selected_levels if fragments[fact_id].section == "项目经历"
     }
-    eligible_projects = _choose_project_order(result.job_type, project_ids)
+    eligible_projects = _choose_project_order(result.job_type, project_ids, fragments)
     eligible_order = [*eligible_internships, *eligible_projects]
     facts = {fact.id: fact for fact in load_facts(project_root / "data" / "facts" / "facts.json")}
     selection = build_selection_plan(

@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 import re
 
+from .layout_config import SECTION_LIMITS
 from .review_parser import parse_review_decisions
 
 
@@ -92,9 +93,10 @@ def check_resume_quality(review_path: Path, tex_path: Path, pdf_path: Path | Non
         )
     if project_entries < 2:
         reasons.append(f"too few project entries: {project_entries} < 2")
-    if project_entries > 2:
+    project_limit = SECTION_LIMITS["项目经历"]
+    if project_entries > project_limit:
         reasons.append(
-            f"too many project entries for the one-page policy: {project_entries} > 2; "
+            f"too many project entries for the one-page policy: {project_entries} > {project_limit}; "
             "run decide --revisit and mark the project omitted from this application as C"
         )
     if professional_entries < 4:

@@ -14,10 +14,14 @@ docs/codex_action_items.md
 docs/session_checkpoint.md
 data/application_outcomes.json
 data/agent_memory.json
+data/mastery_history.json
+data/resume_authorizations.json
 data/jd_library/
 data/evaluation/career_trends.md
+data/evaluation/gap_snapshots.json
 
 # Internal working/handoff docs (not for the public repo)
+SYNC.md
 docs/qwen_no_token_period.md
 docs/handover_*.md
 docs/project_issues_to_fix.md

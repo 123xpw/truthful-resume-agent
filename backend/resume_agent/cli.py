@@ -7,11 +7,23 @@ import subprocess
 import sys
 
 from .analyzer import analyze_jd, save_jd_memory, slugify
+from .authorization_store import apply_reusable_authorizations, record_authorizations_from_review
 from .decision_flow import run_interactive_decision
 from .delivery import DeliveryQualityError, deliver_resume
 from .gaps import build_gap_report, expand_review_from_gaps, render_gap_report, write_gap_report
+from .gap_trends import diff_against_last, load_snapshots, record_gap_snapshot
 from .fact_store import load_facts, resolve_facts_path
+from .interview_feedback import (
+    append_boundary_to_facts,
+    load_feedback,
+    record_feedback,
+    render_feedback,
+)
 from .jd_insight import build_jd_insight_data, render_gap_warning, render_gap_warning_html, render_markdown, write_jd_insight
+from .mastery_history import (
+    load_mastery_history,
+    render_mastery_history,
+)
 from .outcomes import VALID_OUTCOMES, default_outcome_path, load_outcomes, record_outcome, render_outcomes
 from .profile import load_profile
 from .quality import render_quality
@@ -93,7 +105,7 @@ def build_parser() -> argparse.ArgumentParser:
     generate.add_argument(
         "--llm-select",
         action="store_true",
-        help="Use the configured LLM to rank only confirmed fragment IDs within the 3-internship/2-project limits.",
+        help="Use the configured LLM to rank only confirmed fragment IDs within the 3-internship/3-project limits.",
     )
     generate.add_argument(
         "--project-root",
@@ -102,14 +114,17 @@ def build_parser() -> argparse.ArgumentParser:
         help="Project root path",
     )
 
-    decide = subparsers.add_parser("decide", help="Ask A/B/C/D questions and update review_sheet.md")
+    decide = subparsers.add_parser(
+        "decide",
+        help="Grant reusable A/B/C/D resume-wording authorization for new or changed items",
+    )
     decide_input = decide.add_mutually_exclusive_group(required=True)
     decide_input.add_argument("--review", type=Path, help="Path to review_sheet.md")
     decide_input.add_argument("--name", help="Name of a saved JD output folder")
     decide.add_argument(
         "--notes",
         action="store_true",
-        help="Also ask free-text explanation questions after each A/B/C/D choice.",
+        help="Also ask optional authorization/boundary notes after each A/B/C/D choice.",
     )
     decide.add_argument(
         "--revisit",
@@ -156,7 +171,7 @@ def build_parser() -> argparse.ArgumentParser:
     finalize.add_argument(
         "--llm-select",
         action="store_true",
-        help="Use the configured LLM to rank only confirmed fragment IDs within the 3-internship/2-project limits.",
+        help="Use the configured LLM to rank only confirmed fragment IDs within the 3-internship/3-project limits.",
     )
     finalize.add_argument(
         "--project-root",
@@ -267,6 +282,51 @@ def build_parser() -> argparse.ArgumentParser:
     expand_review = subparsers.add_parser("expand-review", help="Append gap candidates to review_sheet.md as pending questions")
     expand_review.add_argument("--name", required=True, help="Name of a saved JD/output folder")
     expand_review.add_argument(
+        "--project-root",
+        type=Path,
+        default=Path(__file__).resolve().parents[2],
+        help="Project root path",
+    )
+
+    record_interview = subparsers.add_parser(
+        "record-interview",
+        help="Record an interview question that exposed a fact boundary",
+    )
+    record_interview.add_argument("--name", required=True, help="Saved application name")
+    record_interview.add_argument("--fact-id", required=True, help="Fact ID the question targeted")
+    record_interview.add_argument("--question", required=True, help="The interview question asked")
+    record_interview.add_argument("--note", default="", help="Short factual note on what was exposed")
+    record_interview.add_argument("--date", help="Event date in YYYY-MM-DD; defaults to today")
+    record_interview.add_argument(
+        "--append-boundary",
+        action="store_true",
+        help="Also append the note to the fact's boundaries in facts.json (deduped).",
+    )
+    record_interview.add_argument(
+        "--project-root",
+        type=Path,
+        default=Path(__file__).resolve().parents[2],
+        help="Project root path",
+    )
+
+    list_interview = subparsers.add_parser(
+        "list-interview",
+        help="List recorded interview feedback for an application",
+    )
+    list_interview.add_argument("--name", required=True, help="Saved application name")
+    list_interview.add_argument(
+        "--project-root",
+        type=Path,
+        default=Path(__file__).resolve().parents[2],
+        help="Project root path",
+    )
+
+    mastery_history_cmd = subparsers.add_parser(
+        "mastery-history",
+        help="Show mastery progression (C->B->A) across decide snapshots",
+    )
+    mastery_history_cmd.add_argument("--fact-id", help="Show timeline for a single fact ID")
+    mastery_history_cmd.add_argument(
         "--project-root",
         type=Path,
         default=Path(__file__).resolve().parents[2],
@@ -394,8 +454,11 @@ def run_review(args: argparse.Namespace) -> int:
         project_root=project_root,
     )
     review_path = write_review_sheet(review, output_dir)
+    reused_count = apply_reusable_authorizations(project_root, review_path)
 
     print(f"Review sheet written: {review_path}")
+    if reused_count:
+        print(f"Reused {reused_count} unchanged resume authorization(s).")
     print(f"Job type: {result.job_type}")
     if result.not_writable:
         print("Not writable:", ", ".join(result.not_writable))
@@ -538,12 +601,20 @@ def run_decide(args: argparse.Namespace) -> int:
         print("Decide failed: interactive review requires a real terminal (TTY).", file=sys.stderr)
         print("Do not pipe answers or drive this command through subprocess stdin.", file=sys.stderr)
         return 2
-    return run_interactive_decision(
+    code = run_interactive_decision(
         review_path,
         collect_notes=args.notes,
         project_root=project_root,
         revisit_all=args.revisit,
     )
+    if code == 0:
+        authorization_count = record_authorizations_from_review(project_root, review_path)
+        if authorization_count:
+            print(
+                f"Reusable resume authorizations saved: {authorization_count} item(s) "
+                "-> data/resume_authorizations.json"
+            )
+    return code
 
 
 def run_prepare(args: argparse.Namespace) -> int:
@@ -574,12 +645,23 @@ def run_prepare(args: argparse.Namespace) -> int:
         ),
         output_dir,
     )
+    reused_count = apply_reusable_authorizations(project_root, review_path)
+    pending_count = count_pending_review_items(review_path)
 
     print(f"JD saved: {saved_jd_path}")
     print(f"Report written: {report_path}")
     print(f"Review sheet written: {review_path}")
-    print(f"Next: python3 backend/run_cli.py decide --name {output_slug}")
-    print(f"Then: python3 backend/run_cli.py finalize --name {output_slug} --llm-select --pdf")
+    if reused_count:
+        print(f"Reused {reused_count} unchanged resume authorization(s).")
+    if pending_count:
+        print(
+            f"Next: python3 backend/run_cli.py decide --name {output_slug} "
+            f"({pending_count} new or changed item(s) only)"
+        )
+        print(f"Then: python3 backend/run_cli.py finalize --name {output_slug} --llm-select --pdf")
+    else:
+        print("All matched wording already has reusable authorization.")
+        print(f"Next: python3 backend/run_cli.py finalize --name {output_slug} --llm-select --pdf")
     if result.not_writable:
         print("Not writable:", ", ".join(result.not_writable))
     return 0
@@ -818,6 +900,24 @@ def run_career_trends(args: argparse.Namespace) -> int:
     report = "\n".join(lines)
     print(report)
 
+    history = load_snapshots(project_root)
+    diff = diff_against_last(tech_jds, history)
+    if history:
+        print(f"\n## 📈 与上次快照对比")
+        print("")
+        if diff.added:
+            print(f"新增缺口: {', '.join(diff.added)}")
+        else:
+            print("新增缺口: 无")
+        if diff.resolved:
+            print(f"已补齐/消失: {', '.join(diff.resolved)}")
+        else:
+            print("已补齐/消失: 无")
+        print("")
+
+    snapshot = record_gap_snapshot(project_root, tech_jds)
+    print(f"Snapshot recorded: {snapshot.date} ({len(snapshot.gaps)} gap techs)")
+
     if args.write:
         out = project_root / "data" / "evaluation" / "career_trends.md"
         out.parent.mkdir(parents=True, exist_ok=True)
@@ -851,6 +951,53 @@ def run_expand_review(args: argparse.Namespace) -> int:
     if result.skipped_existing:
         print(f"Skipped existing fact_ids: {result.skipped_existing}")
     print(f"Next: python3 backend/run_cli.py decide --name {name}")
+    return 0
+
+
+def run_record_interview(args: argparse.Namespace) -> int:
+    name = slugify(args.name)
+    try:
+        feedback = record_feedback(
+            project_root=args.project_root,
+            application=name,
+            fact_id=args.fact_id,
+            question=args.question,
+            note=args.note,
+            event_date=args.date,
+        )
+    except ValueError as exc:
+        print(f"Record interview failed: {exc}", file=sys.stderr)
+        return 2
+    print(f"Feedback recorded: {feedback.date} [{feedback.fact_id}] {feedback.question}")
+    if args.append_boundary:
+        if not args.note:
+            print("--append-boundary requires --note; skipped boundary write.", file=sys.stderr)
+            return 2
+        facts_path = resolve_facts_path(args.project_root / "data" / "facts" / "facts.json")
+        result = append_boundary_to_facts(facts_path, args.fact_id, args.note)
+        if result == "written":
+            print(f"Boundary appended to fact {args.fact_id} in {facts_path}")
+        elif result == "duplicate":
+            print(f"Boundary already exists for fact {args.fact_id}; skipped.")
+        elif result == "fact_not_found":
+            print(f"Fact not found in {facts_path}: {args.fact_id}", file=sys.stderr)
+            return 2
+        else:
+            print(f"Facts file not found: {facts_path}", file=sys.stderr)
+            return 2
+    return 0
+
+
+def run_list_interview(args: argparse.Namespace) -> int:
+    name = slugify(args.name)
+    items = load_feedback(args.project_root, name)
+    print(render_feedback(items))
+    return 0
+
+
+def run_mastery_history(args: argparse.Namespace) -> int:
+    history = load_mastery_history(args.project_root)
+    print(render_mastery_history(history, fact_id=args.fact_id))
     return 0
 
 
@@ -891,6 +1038,12 @@ def main(argv: list[str] | None = None) -> int:
         return run_career_trends(args)
     if args.command == "expand-review":
         return run_expand_review(args)
+    if args.command == "record-interview":
+        return run_record_interview(args)
+    if args.command == "list-interview":
+        return run_list_interview(args)
+    if args.command == "mastery-history":
+        return run_mastery_history(args)
     parser.error(f"Unknown command: {args.command}")
     return 2
 

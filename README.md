@@ -80,25 +80,32 @@ private profile or API key is needed for this path.
 .venv/bin/python backend/run_cli.py status --name demo_tencent
 ```
 
-During `decide`, each matched experience shows two complete alternatives:
+`decide` is a one-time resume-wording authorization step, not an interview
+readiness test. Each new or changed experience shows two complete alternatives:
 
-- `A`: the core wording is accurate and explainable; allow it into the candidate pool.
-- `B`: only the conservative wording is accurate and explainable; allow it into the pool.
-- `C`: the fact is broadly accurate, but the candidate does not currently accept its follow-up risk.
+- `A`: the core wording is factually accurate; authorize it for resumes.
+- `B`: only the conservative wording is accurate; authorize that version.
+- `C`: the fact is broadly accurate, but keep it off resumes for now.
 - `D`: the underlying fact needs correction.
 
-A/B confirms truthfulness and explainability, not editorial selection.
+A/B confirms factual accuracy and permission to use the wording, not editorial selection.
 `finalize` selects at most three internships and two projects and writes
 `selection_plan.md`. With `--llm-select`, the model may return only existing
 fragment IDs; unknown, duplicate, wrong-section, or over-capacity IDs fail
 closed, and model prose never enters the resume.
 
+The authorization is stored locally in `data/resume_authorizations.json` and
+reused across applications when the exact fact and fragment content hash is
+unchanged. A new JD therefore normally skips `decide` for wording already
+authorized. If a fact or bullet changes, only the affected item becomes pending
+again. Interview preparation and free-text notes remain optional.
+
 `decide` requires a TTY and rejects piped stdin. This is a friction barrier,
 not cryptographic proof that a human typed the answer. Resume generation also
 checks for pending decisions, interactive confirmation markers, and stale
-artifacts. If the JD, fact bank, or resume fragments change after review, the
-review itself becomes stale: `decide`, `generate`, `finalize`, and `deliver`
-refuse it until `prepare` rebuilds the review and the candidate confirms again.
+artifacts. If the JD, fact bank, or resume fragments change after review,
+`prepare` rebuilds the review, automatically reapplies unchanged content-hash
+authorizations, and asks only about new or changed wording.
 
 To compile the generated TeX, install XeLaTeX/latexmk or Tectonic. When only
 Tectonic is available, run the command printed by `finalize`.
@@ -167,7 +174,7 @@ Public JD
 Matched fact IDs
    --> source-linked A/B fragments
    --> candidate truth/explainability confirmation
-   --> restricted 3-internship/2-project selection plan
+   --> restricted 3-internship/3-project selection plan
    --> included/omitted report
    --> stale/pending/confirmation checks
    --> LaTeX resume draft
@@ -210,6 +217,9 @@ Re-run the evaluation:
 | `gap-check` | Warn about missing evidence for a single JD (terminal + HTML) |
 | `career-trends` | Aggregate missing-tech gaps across JDs and flag repeated ones |
 | `record-outcome` | Record an observed application state and PDF hash |
+| `record-interview` | Record interview feedback and optionally append to fact boundaries |
+| `list-interview` | List recorded interview feedback for an application |
+| `mastery-history` | Show mastery progression (C->B->A) across decide snapshots |
 
 Run `python3 backend/run_cli.py --help` for all options.
 
@@ -245,3 +255,14 @@ unsupported-term blocking, outcome hashes, and delivery gates.
 
 Design details and tradeoffs are in `docs/technical_design.md`,
 `docs/risk_policy.md`, and `docs/evaluation_plan.md`.
+
+## Web UI (Optional)
+
+A FastAPI web interface wraps the CLI capabilities into a single-page UI:
+
+```bash
+.venv/bin/uvicorn backend.resume_agent.web.app:app --reload
+```
+
+Open http://127.0.0.1:8000 for JD analysis, application list, gap trends,
+mastery timeline, and interview feedback recording.

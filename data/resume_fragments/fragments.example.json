@@ -9,13 +9,13 @@
     "keywords": "Claude Code, Codex, AI Coding, SCUC, UnitCommitment.jl, 启停轨迹, Minimum uptime, 自动化测试, Julia, subhourly, 算例生成",
     "bullets": {
       "A": [
-        "\\textbf{SCUC 模型扩展 MVP：}基于论文将机组启停轨迹约束接入 UnitCommitment.jl，完成机组预处理与 Base/v1/v2 自动化对比测试，并形成可交付验证的完整 MVP。",
-        "\\textbf{论文到代码核验：}完成一组 SCUC 约束的论文公式、代码变量与源码路径对比；使用 Claude Code/Codex 辅助代码定位，并人工核验实现差异。",
-        "\\textbf{算例生成：}实现 subhourly 时段转换，并构建跨天连续的算例生成流程。"
+        "\\textbf{SCUC 模型扩展：}将机组启停轨迹约束（Minimum uptime/down time）接入开源 UnitCommitment.jl，完成 Base/v1/v2 三版本自动化对比测试，形成可交付验证的 MVP。",
+        "\\textbf{文献到代码映射：}建立 21 项 SCUC 约束的「论文公式→代码变量→源码路径」三维对照表，定位并记录实现差异。",
+        "\\textbf{算例工程：}实现 36→72 时段 subhourly 转换，区分线性插值与重复填充策略，构建跨天连续 SCUC 算例库。"
       ],
       "B": [
-        "\\textbf{SCUC 模型扩展 MVP：}在 AI Coding 辅助下完成启停轨迹、机组预处理与 Base/v1/v2 自动化对比测试，并形成可交付验证的 MVP。",
-        "\\textbf{工程核验：}人工核验 SCUC 约束的论文到代码映射，并实现 subhourly 转换与跨天算例生成流程。"
+        "\\textbf{SCUC 模型扩展：}将启停轨迹约束接入 UnitCommitment.jl，完成 Base/v1/v2 自动化对比测试并形成可交付 MVP。",
+        "\\textbf{工程核验：}建立 SCUC 约束的论文到代码映射，并实现 subhourly 转换与跨天算例生成流程。"
       ]
     }
   },
@@ -33,13 +33,13 @@
     "keywords": "Claude Code, Codex, C++, HiGHS, Clarabel.cpp, SCUC, UnitCommitment.jl, 启停轨迹, Minimum uptime, 自动化测试, subhourly, KKT, 基准测试",
     "bullets": {
       "A": [
-        "\\textbf{SCUC 模型扩展 MVP：}在 AI Coding 辅助下将启停轨迹约束接入 UnitCommitment.jl，完成机组预处理与 Base/v1/v2 自动化对比测试，并形成可交付验证的完整 MVP。",
-        "\\textbf{求解器集成 MVP：}将 Clarabel.cpp 接入 HiGHS，打通 LP/QP 数据映射、解回写与 MIP 根节点路由，并实现 KKT 质量门和 simplex 回退。",
-        "\\textbf{算例与基准：}实现 subhourly 时段转换，并通过一组 SCUC 算例验证三种根节点 LP 求解器。"
+        "\\textbf{SCUC 模型扩展：}将启停轨迹约束接入开源 UnitCommitment.jl，完成 Base/v1/v2 三版本自动化对比测试，形成可交付验证的 MVP。",
+        "\\textbf{求解器集成：}在 HiGHS fork 中集成 Clarabel.cpp 后端，设计 LP/QP 数据映射、解回写与 MIP 根节点路由，并实现 KKT 残差质量门与 simplex 回退机制。",
+        "\\textbf{算例与基准：}实现 subhourly 时段转换，通过一组 SCUC 算例验证三种根节点 LP 求解器的正确性与性能。"
       ],
       "B": [
-        "\\textbf{SCUC 模型扩展 MVP：}在 AI Coding 辅助下完成启停轨迹、机组预处理与 Base/v1/v2 自动化对比测试，并形成可交付验证的 MVP。",
-        "\\textbf{求解器集成 MVP：}完成 Clarabel.cpp 的 LP/QP 数据转换、解回写和 MIP 根节点调用，并通过定向测试与回归检查验证关键路径。"
+        "\\textbf{SCUC 模型扩展：}将启停轨迹约束接入 UnitCommitment.jl，完成 Base/v1/v2 自动化对比测试并形成可交付 MVP。",
+        "\\textbf{求解器集成：}在 HiGHS fork 中完成 Clarabel.cpp 的 LP/QP 数据转换、解回写和 MIP 根节点调用，并通过定向测试验证关键路径。"
       ]
     }
   },
@@ -53,13 +53,13 @@
     "keywords": "Python, REST API, 数据处理, 自动化任务, 阿里云",
     "bullets": {
       "A": [
-        "\\textbf{金融数据管道：}基于 Python/REST API 拉取一组市场产品在指定时点的 Close 数据，完成 token 鉴权与刷新、bid/ask 均值计算和失败重试。",
-        "\\textbf{报表自动化：}按多个业务时点更新多张 Excel sheet，计算跨市场派生指标及阶段变化率。",
-        "\\textbf{云端调度：}部署至云端按市场工作日与开市时间定时运行，处理夏冬令时切换与缺失标记，通过日志和邮件反馈日报。"
+        "\\textbf{金融数据管道：}构建 REST API 数据采集与清洗管道，完成 token 鉴权刷新、bid/ask 均值计算与失败重试，替代人工逐时段拉取。",
+        "\\textbf{报表自动化：}按多个业务时点自动更新多 sheet Excel 报表，计算跨市场派生指标与阶段变化率，消除手工计算误差。",
+        "\\textbf{云端调度：}部署阿里云按市场工作日与开市时间定时运行，处理夏冬令时切换与缺失标记，通过日志和邮件反馈日报。"
       ],
       "B": [
-        "\\textbf{数据自动化：}用 Python 对接 REST API，拉取指定时间点的 Close 数据并按模板写入多 sheet 报表。",
-        "\\textbf{定时处理：}在云端配置脚本定时运行，通过日志和报告邮件反馈结果，并处理缺失标记、阶段对比和百分比计算。"
+        "\\textbf{数据自动化：}用 Python 对接 REST API 拉取 Close 数据并自动写入多 sheet 报表，替代人工操作。",
+        "\\textbf{定时处理：}在云端配置脚本定时运行，通过日志和邮件反馈结果，并处理缺失标记与阶段对比。"
       ]
     }
   },
@@ -70,14 +70,14 @@
     "date": "2025",
     "title": "C\\#开发实习生",
     "organization": "示例仓储公司",
-    "keywords": "C\\#, 对象存储, 多模态接口, Prompt 约束, JSON 结构化输出",
+    "keywords": "C\\#, 对象存储, 浏览器自动化, 多模态网页会话, Prompt 约束, JSON 结构化输出",
     "bullets": {
       "A": [
-        "\\textbf{多模态识别链路：}基于 ASP.NET Core/C\\# 开发仓储推荐 MVP，将图片上传对象存储后通过浏览器自动化驱动多模态网页会话，并用 Prompt 约束物品和尺寸等 JSON 输出。",
-        "\\textbf{仓型决策规则：}将结构化识别结果接入尺寸、体积与堆叠约束，完成仓型筛选、活体动物拦截、自定义校验和手动输入兜底。"
+        "\\textbf{多模态识别链路：}基于 ASP.NET Core/C\\# 开发仓储推荐 MVP，将图片上传对象存储后通过浏览器自动化驱动多模态网页会话识别物品，并用 Prompt 约束名称、尺寸与可堆叠性等 JSON 输出。",
+        "\\textbf{规则引擎与降级：}将结构化识别结果接入尺寸/体积/堆叠约束做仓型筛选，设计活体动物拦截、自定义校验与识别失败时手动输入兜底。"
       ],
       "B": [
-        "\\textbf{仓储推荐 MVP：}使用 C\\# 串联图片上传、多模态结构化识别与仓型推荐，通过 Prompt 约束物品名称、尺寸和可否堆叠等 JSON 输出。",
+        "\\textbf{仓储推荐 MVP：}使用 C\\# 串联对象存储图片上传、浏览器自动化网页识别与仓型推荐，并通过 Prompt 约束 JSON 输出。",
         "\\textbf{规则兜底：}根据结构化物品信息和仓型规格做规则匹配，并为识别失败提供手动输入兜底。"
       ]
     }
@@ -92,11 +92,11 @@
     "keywords": "C++, HiGHS, Clarabel.cpp, LP/QP, MIP 根节点, KKT, SCUC 基准",
     "bullets": {
       "A": [
-        "\\textbf{求解器集成 MVP：}在 AI Coding 工具辅助下，将 Clarabel.cpp 接入 HiGHS 可选 LP/QP 后端，完成数据映射、解回写与 MIP 根节点路由，并加入 KKT 质量门和 simplex 回退。",
-        "\\textbf{实验验证：}编写定向测试与基准脚本，在一组 SCUC 算例上记录不同根节点 LP 求解器的求解时间与 Optimal 状态。"
+        "\\textbf{求解器集成：}在 HiGHS fork 中集成 Clarabel.cpp 后端，设计 LP/QP 数据映射、解回写与 MIP 根节点路由，并实现 KKT 残差质量门与 simplex 回退机制。",
+        "\\textbf{实验验证：}编写定向测试与基准脚本，在一组 SCUC 算例上记录三种根节点 LP 求解器的求解时间与 Optimal 状态。"
       ],
       "B": [
-        "\\textbf{求解器集成 MVP：}在 AI Coding 工具辅助下，为 HiGHS 实现 Clarabel.cpp 集成 MVP，覆盖 LP/QP 数据转换、解回写和 MIP 根节点调用。"
+        "\\textbf{求解器集成：}在 HiGHS fork 中实现 Clarabel.cpp 集成 MVP，覆盖 LP/QP 数据转换、解回写和 MIP 根节点调用。"
       ]
     }
   },
@@ -104,19 +104,18 @@
     "fact_id": "project_chinese_learning_mvp",
     "section": "项目经历",
     "entry_type": "project",
-    "date": "2025 - 2026",
-    "title": "AI 中文学习小程序 MVP（脱敏示例）",
+    "date": "2026.06",
+    "title": "AI 中文学习小程序（脱敏示例）",
     "organization": "",
-    "keywords": "Cursor, Claude, Coze, Agent 原型, Prompt 管理, AI 产品 Demo",
+    "keywords": "WeChat Mini Program, 前端开发, Authentication API Integration, User Authentication, Coze Agent, Prompt Engineering, 作文批改, 智能对话",
     "bullets": {
       "A": [
-        "\\textbf{MVP 原型搭建：}作为团队主要技术成员，基于 Cursor 将 UI 图转化为小程序页面，完成登录、注册、学习中心等演示原型。",
-        "\\textbf{基础接口对接：}围绕登录/注册流程理解后端接口和数据库字段，排查 AI 生成代码中的变量名、字段名和页面引用问题。",
-        "\\textbf{Coze Agent 原型：}梳理作文批改与分级对话需求，借助 Claude 生成并自检 Prompt，在 Coze 中配置可演示智能体。"
+        "\\textbf{微信小程序前端与接口联调：}作为团队主要技术成员，完成登录、注册、学习中心及子页面开发，参与登录/注册接口联调，定位并修复变量名、数据库字段与页面引用不一致问题。",
+        "\\textbf{中文学习 Agent：}围绕作文批改与按学习者等级分级对话场景，梳理交互需求、设计并自检 Prompt，在 Coze 配置对应智能体。"
       ],
       "B": [
-        "\\textbf{小程序 MVP：}基于 Cursor 将 UI 图转化为微信小程序演示页面，完成登录、注册、学习中心等核心页面原型。",
-        "\\textbf{Agent Demo：}梳理作文批改与分级对话需求，借助 Claude 生成 Prompt，并在 Coze 中配置可演示智能体。"
+        "\\textbf{微信小程序前端：}完成登录、注册、学习中心等页面开发，参与登录/注册接口联调并排查字段与页面引用问题。",
+        "\\textbf{Coze Agent：}梳理作文批改与分级对话需求，设计 Prompt 并在 Coze 配置对应智能体。"
       ]
     }
   },
@@ -128,16 +127,16 @@
     "title": "情绪像素艺术可视化：LLM 条件工程与多模态生成",
     "url_text": "github.com/123xpw/emotion-pixel-viz",
     "url": "https://github.com/123xpw/emotion-pixel-viz",
-    "keywords": "Prompt Engineering, DeepSeek API, CLIP 评估, 多模态生成, 消融实验",
+    "keywords": "Prompt Engineering, DeepSeek-Chat, DALL-E 3, ChatGPT Images, CLIP 评估, 多模态生成, 消融实验",
     "bullets": {
       "A": [
-        "\\textbf{多模态生成链路：}构建“中文文本 -> 情绪 JSON -> 视觉生成条件”流程，引入人工审计降低错误情绪字段传导。",
-        "\\textbf{Prompt 压缩策略：}将多维情绪压缩为核心隐喻和 2-3 个视觉元素，缓解 Greedy Prompt 信息过载导致的生成失焦。",
-        "\\textbf{消融实验与评估：}设计 Baseline/Partial/Full 三条件实验，用 CLIP ViT-B/32 评估图文对齐，Partial 0.2163，Full 0.2593。"
+        "\\textbf{多模态生成链路：}构建「中文文本→情绪 JSON→视觉生成条件」流程，引入人工审计环节降低错误情绪字段向下游传导。",
+        "\\textbf{Prompt 工程优化：}设计情绪压缩策略，将多维情绪映射为核心隐喻+2-3 个视觉元素，解决 Greedy Prompt 信息过载导致的生成失焦问题。",
+        "\\textbf{消融实验与评估：}设计 Baseline/Partial/Full 三条件实验，在 10 个样本上用 CLIP ViT-B/32 评估图文对齐（0.2530 / 0.2163 / 0.2593）；Full 优于 Partial 9/10 次，但相比 Baseline 均值仅提升 2.5%。"
       ],
       "B": [
         "\\textbf{多模态生成链路：}构建中文文本到情绪 JSON、再到视觉生成条件的流程，用 DeepSeek API 输出结构化情绪信息。",
-        "\\textbf{效果评估：}设计 Baseline/Partial/Full 三组对照实验，用 CLIP ViT-B/32 评估图文对齐，记录 Partial 0.2163、Full 0.2593。"
+        "\\textbf{效果评估：}在 10 个样本上用 CLIP ViT-B/32 对比 Baseline/Partial/Full 三组图文对齐结果（0.2530 / 0.2163 / 0.2593），Full 相比 Baseline 均值提升 2.5%。"
       ]
     }
   },
@@ -145,7 +144,8 @@
     "fact_id": "project_truthful_resume_agent",
     "source_fact_ids": [
       "project_truthful_resume_agent_cli",
-      "project_truthful_resume_agent_rag_qdrant"
+      "project_truthful_resume_agent_rag_qdrant",
+      "project_truthful_resume_agent_agent"
     ],
     "section": "项目经历",
     "entry_type": "project_url",
@@ -154,17 +154,17 @@
     "organization": "",
     "url_text": "GitHub: truthful-resume-agent",
     "url": "https://github.com/123xpw/truthful-resume-agent",
-    "keywords": "Python, Qdrant, fastembed, DeepSeek API, RAG, Markdown, HTML, LaTeX",
+    "keywords": "Python, LangChain, LangGraph, 工具调用, RAG, Qdrant, fastembed, FastAPI, DeepSeek API",
     "bullets": {
       "A": [
-        "\\textbf{本地 CLI 流程：}构建“JD 解析 -> 真实经历召回 -> 可写性审核 -> 简历草稿生成”流程，将岗位要求与个人事实库对齐，并在生成前拦截缺少事实依据或面试难以解释的内容。",
-        "\\textbf{语义检索：}基于 fastembed 与 Qdrant 构建本地事实片段索引，将 JD 要求与个人真实经历做相似度召回，并结合关键词匹配生成可审查的 match report 与 JD Insight HTML。",
-        "\\textbf{RAG 表达校验：}在 JD Insight 中调用 DeepSeek 生成候选措辞，并通过事实编号溯源校验与事实边界检查过滤无法追溯、超出经历范围或容易造成过度包装的输出。"
+        "\\textbf{Agent 闭环：}基于 LangChain + LangGraph 构建对话 Agent，StateGraph 四节点「检索→生成→校验→反思」闭环，支持工具调用（search\\_facts / verify\\_fact），verify 节点按结果条件路由（未过→反思重试，最多 3 次），MemorySaver checkpoint 维护会话内状态，JSON 记忆持久化跨会话偏好。",
+        "\\textbf{双路检索与评估：}构建 keyword + Qdrant 语义检索双路召回，在 4 个 JD 上用审计标签对比，语义召回未提升有效 fact 召回、且在数据岗样本误召无关 fact（有用精度 50\\%→20\\%），据此保持 semantic opt-in。",
+        "\\textbf{门控与工程化：}以 FastAPI 提供 Web UI、CLI 提供 analyze / gap-check / career-trends 命令，事实库为唯一真值源，生成前用 fact\\_id 溯源 + 边界检查拦截无事实依据或过度包装的内容。"
       ],
       "B": [
-        "\\textbf{本地 CLI 流程：}构建“JD 解析 -> 真实经历召回 -> 可写性审核 -> 简历草稿生成”流程，将岗位要求与个人事实库对齐，避免缺少事实依据的内容进入草稿。",
-        "\\textbf{语义检索：}基于 fastembed 与 Qdrant 构建本地事实片段索引，将 JD 要求与个人真实经历做相似度召回，并结合关键词匹配生成可审查报告。",
-        "\\textbf{RAG 表达校验：}在 JD Insight 中基于已匹配事实调用 DeepSeek 生成候选措辞，并用事实编号溯源校验与事实边界检查过滤过度包装的输出。"
+        "\\textbf{对话 Agent：}基于 LangChain + LangGraph 串联检索、生成、校验、反思四个节点，用工具调用查询事实库，并以 checkpoint 和 JSON 分别维护会话内状态与跨会话偏好。",
+        "\\textbf{双路检索与评估：}构建 keyword + Qdrant 语义检索双路召回，在 4 个 JD 上对比审计标签后保持 semantic opt-in。",
+        "\\textbf{门控与工程化：}通过 FastAPI Web UI 与 CLI 提供 JD 分析和缺口追踪，生成前用 fact\\_id 溯源与边界检查过滤过度包装的输出。"
       ]
     }
   },
@@ -173,16 +173,16 @@
     "section": "项目经历",
     "entry_type": "project_url",
     "date": "2025 - 2026",
-    "title": "DL-Learning-Lab：深度学习与视觉生成学习项目",
+    "title": "DL-Learning-Lab：深度学习模型复现实验",
     "url_text": "github.com/123xpw/DL-Learning-Lab",
     "url": "https://github.com/123xpw/DL-Learning-Lab",
     "keywords": "PyTorch, DDPM, CFG, Stable Diffusion LoRA, SegFormer",
     "bullets": {
       "A": [
-        "\\textbf{开源学习实践：}基于 PyTorch 完成 DDPM/CFG、Stable Diffusion LoRA、SegFormer 等实验，整理代码与理论笔记。"
+        "\\textbf{深度学习实践：}基于 PyTorch 复现 DDPM/CFG 去噪、Stable Diffusion LoRA 微调与 SegFormer 语义分割，整理代码与理论对照笔记。"
       ],
       "B": [
-        "\\textbf{学习项目：}基于 PyTorch 复现 DDPM/CFG、Stable Diffusion LoRA、SegFormer 等实验并整理学习笔记。"
+        "\\textbf{模型复现：}基于 PyTorch 复现 DDPM/CFG、Stable Diffusion LoRA、SegFormer 等实验并整理理论对照笔记。"
       ]
     }
   }

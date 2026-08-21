@@ -47,6 +47,8 @@ data/resume_fragments/
 data/jd_library/
   2026-08-12_tencent_ai_application.md   # private (gitignored)
 
+data/agent_memory.json                   # long-term conversational memory (private, gitignored)
+
 data/outputs/
   tencent_ai_application/
     match_report.md
@@ -185,7 +187,15 @@ Every fragment keeps internal trace metadata:
 }
 ```
 
-> 注：复合 fragment（如 `intern_optimization_combined`）额外带 `source_fact_ids` 字段列出其来源 fact；`project_url` 类型的 fragment 额外带 `url_text` / `url` 字段。`entry_type` 取值：`internship` / `project` / `project_url`。
+> 注：复合 fragment（如 `intern_optimization_combined`）额外带 `source_fact_ids` 字段列出其来源 fact；`project_url` 类型的 fragment 额外带 `url_text` / `url` 字段。`entry_type` 取值：`internship` / `project` / `project_url`。可选字段 `display_priority`（整数，越小越靠前）用于控制未在硬编码顺序中的 fragment 的展示位置。
+
+## Dynamic Fragment Ordering
+
+`layout_config.py` 维护实习与项目的展示顺序：
+
+- 已知 fragment 按 `INTERNSHIP_ORDER` / `PROJECT_ORDER_BY_JOB_TYPE` 的硬编码顺序排列。
+- 新增的 fragment（未出现在硬编码列表）按 `display_priority`（升序，未设则视为 999）+ `fact_id` 自动追加在末尾。
+- 这样新增 fragment 无需改动 `layout_config.py` 即可被正确排序；若需控制其位置，在 fragment JSON 里设 `display_priority`。
 
 LLM output cannot update facts, fragments, review decisions, or resume files.
 
@@ -200,6 +210,43 @@ Each analysis run should produce:
 - `jd_insight.md` / `jd_insight.html` — Tier A (rule-based) + Tier B (LLM) JD analysis
 - `gap_report.md` — unmatched JD requirements with gap classification
 - `gap_warning.md` / `gap_warning.html` — prioritized gap warnings for interview prep
+
+## Conversational Agent & Memory
+
+A LangChain + LangGraph conversational agent (`backend/resume_agent/agent/`) sits alongside the deterministic CLI pipeline. It is a separate interaction surface; it does **not** replace the `prepare → decide → finalize → deliver` status machine and cannot write resume artifacts.
+
+### Graph Topology
+
+The state graph implements a retrieve → generate → verify → reflect loop:
+
+```text
+START
+  -> retrieve   (binds search_facts / verify_fact tools)
+  -> generate   (drafts an answer, injects long-term preferences)
+  -> verify     (PASS / FAIL gate)
+  -> conditional edge:
+       PASS        -> END
+       FAIL < 3 turns -> reflect -> retrieve  (retry)
+       FAIL >= 3 turns -> END
+```
+
+`MAX_TURNS = 3` bounds the retry loop. The LLM is lazily constructed as a singleton via `get_model()` / `get_api_url()` / `get_api_key()` from `llm_client.py` (single source of truth for model/base URL).
+
+### Two-Layer Memory
+
+- **Short-term (in-process):** LangGraph `MemorySaver` checkpointer keyed by `thread_id` keeps multi-turn context within one chat session.
+- **Long-term (cross-session):** `data/agent_memory.json` stores user preferences as key/value pairs via `memory.py`. `graph.py._generate` injects `list_preferences()` into the system prompt so the agent remembers cross-session preferences. CRUD is exposed through `save_preference` / `recall_preference` / `delete_preference` / `list_preferences`.
+
+### Chat REPL Commands
+
+`chat.py` exposes long-term memory operations directly in the REPL (no LLM round-trip):
+
+- `prefs` — list all preferences
+- `prefs <key>` — recall one preference
+- `记住 <key>=<value>` — save a preference
+- `忘记 <key>` — delete a preference
+
+The LLM path is used only for general questions; it never updates facts, fragments, or confirmation records.
 
 ## Implementation Phases
 

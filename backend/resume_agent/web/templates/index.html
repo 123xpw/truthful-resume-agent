@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Truthful Resume Agent</title>
+<style>
+  :root {
+    --accent: #2F5597;
+    --text: #202124;
+    --muted: #555555;
+    --border: #D8DDE6;
+    --bg: #f8f9fa;
+    --card: #ffffff;
+    --danger: #c0392b;
+    --success: #27ae60;
+    --warning: #e67e22;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, "PingFang SC", "Noto Sans CJK SC", sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+  header { background: var(--accent); color: white; padding: 1rem 2rem; }
+  header h1 { font-size: 1.4rem; }
+  header p { font-size: 0.85rem; opacity: 0.85; }
+  .container { max-width: 1100px; margin: 0 auto; padding: 1.5rem; }
+  .tabs { display: flex; gap: 0.5rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
+  .tab { padding: 0.5rem 1rem; background: var(--card); border: 1px solid var(--border); border-radius: 6px; cursor: pointer; font-size: 0.9rem; }
+  .tab.active { background: var(--accent); color: white; border-color: var(--accent); }
+  .panel { display: none; }
+  .panel.active { display: block; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem; margin-bottom: 1rem; }
+  .card h2 { font-size: 1.1rem; margin-bottom: 1rem; color: var(--accent); }
+  textarea { width: 100%; min-height: 120px; padding: 0.75rem; border: 1px solid var(--border); border-radius: 6px; font-family: monospace; font-size: 0.85rem; resize: vertical; }
+  input[type="text"] { width: 100%; padding: 0.5rem; border: 1px solid var(--border); border-radius: 6px; font-size: 0.9rem; }
+  button { background: var(--accent); color: white; border: none; padding: 0.5rem 1.2rem; border-radius: 6px; cursor: pointer; font-size: 0.9rem; }
+  button:hover { opacity: 0.9; }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  pre { background: var(--bg); padding: 1rem; border-radius: 6px; overflow-x: auto; font-size: 0.82rem; white-space: pre-wrap; word-break: break-word; max-height: 500px; overflow-y: auto; }
+  .badge { display: inline-block; padding: 0.15rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: 600; }
+  .badge-high { background: #fadbd8; color: var(--danger); }
+  .badge-low { background: #fef9e7; color: var(--warning); }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 0.5rem; border-bottom: 1px solid var(--border); font-size: 0.85rem; }
+  th { color: var(--muted); font-weight: 600; }
+  .row { display: flex; gap: 1rem; flex-wrap: wrap; }
+  .row > * { flex: 1; min-width: 200px; }
+  .status-msg { padding: 0.75rem; border-radius: 6px; margin: 0.5rem 0; font-size: 0.85rem; }
+  .status-ok { background: #eafaf1; color: var(--success); }
+  .status-err { background: #fadbd8; color: var(--danger); }
+  .loading { color: var(--muted); font-style: italic; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Truthful Resume Agent</h1>
+  <p>基于事实库的简历生成系统 | <a href="https://github.com/123xpw/truthful-resume-agent" style="color:rgba(255,255,255,0.8)">GitHub</a></p>
+</header>
+<div class="container">
+  <div class="tabs">
+    <div class="tab active" data-tab="analyze">JD 分析</div>
+    <div class="tab" data-tab="applications">申请列表</div>
+    <div class="tab" data-tab="trends">缺口趋势</div>
+    <div class="tab" data-tab="mastery">Mastery 时间线</div>
+    <div class="tab" data-tab="interview">面试反馈</div>
+  </div>
+
+  <!-- JD 分析 -->
+  <div class="panel active" id="panel-analyze">
+    <div class="card">
+      <h2>分析 JD</h2>
+      <div class="row">
+        <div>
+          <label>申请名称</label><br>
+          <input type="text" id="analyze-name" placeholder="tencent_ai_application">
+        </div>
+        <div>
+          <label>Matcher</label><br>
+          <select id="analyze-matcher" style="padding:0.5rem;border:1px solid var(--border);border-radius:6px;font-size:0.9rem;">
+            <option value="keyword">keyword（默认，保守）</option>
+            <option value="semantic">semantic（需 Qdrant）</option>
+          </select>
+        </div>
+      </div>
+      <br>
+      <label>JD 文本</label><br>
+      <textarea id="analyze-jd" placeholder="粘贴 JD 全文..."></textarea>
+      <br><br>
+      <button onclick="runAnalyze()">分析</button>
+      <div id="analyze-result"></div>
+    </div>
+  </div>
+
+  <!-- 申请列表 -->
+  <div class="panel" id="panel-applications">
+    <div class="card">
+      <h2>申请列表</h2>
+      <button onclick="loadApplications()">刷新</button>
+      <div id="applications-result"></div>
+    </div>
+  </div>
+
+  <!-- 缺口趋势 -->
+  <div class="panel" id="panel-trends">
+    <div class="card">
+      <h2>跨 JD 缺口趋势</h2>
+      <button onclick="loadTrends()">加载</button>
+      <div id="trends-result"></div>
+    </div>
+  </div>
+
+  <!-- Mastery 时间线 -->
+  <div class="panel" id="panel-mastery">
+    <div class="card">
+      <h2>Mastery 进度时间线</h2>
+      <div class="row">
+        <div>
+          <label>Fact ID（可选，留空看全部）</label><br>
+          <input type="text" id="mastery-fact-id" placeholder="intern_data_automation">
+        </div>
+      </div>
+      <br>
+      <button onclick="loadMastery()">加载</button>
+      <div id="mastery-result"></div>
+    </div>
+  </div>
+
+  <!-- 面试反馈 -->
+  <div class="panel" id="panel-interview">
+    <div class="card">
+      <h2>记录面试反馈</h2>
+      <div class="row">
+        <div><label>申请名称</label><br><input type="text" id="fb-name" placeholder="tencent_ai_application"></div>
+        <div><label>Fact ID</label><br><input type="text" id="fb-fact-id" placeholder="intern_data_automation"></div>
+      </div>
+      <br>
+      <label>面试问题</label><br>
+      <input type="text" id="fb-question" placeholder="数据自动化的分页机制怎么实现的？">
+      <br><br>
+      <label>备注（暴露的边界）</label><br>
+      <input type="text" id="fb-note" placeholder="No pagination in current implementation">
+      <br><br>
+      <button onclick="recordFeedback()">记录</button>
+      <div id="interview-record-result"></div>
+    </div>
+    <div class="card">
+      <h2>查看面试反馈</h2>
+      <div class="row">
+        <div><label>申请名称</label><br><input type="text" id="fb-list-name" placeholder="tencent_ai_application"></div>
+      </div>
+      <br>
+      <button onclick="loadFeedback()">加载</button>
+      <div id="interview-list-result"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = '/api';
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.onclick = () => {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById('panel-' + tab.dataset.tab).classList.add('active');
+  };
+});
+
+async function api(path, opts = {}) {
+  const res = await fetch(API + path, opts);
+  if (!res.ok) { const e = await res.json().catch(() => ({detail: res.statusText})); throw new Error(e.detail || 'Request failed'); }
+  return res.json();
+}
+
+function showResult(id, html, cls = '') {
+  const el = document.getElementById(id);
+  el.innerHTML = `<div class="status-msg ${cls}">${html}</div>`;
+}
+
+async function runAnalyze() {
+  const name = document.getElementById('analyze-name').value.trim();
+  const jd = document.getElementById('analyze-jd').value.trim();
+  const matcher = document.getElementById('analyze-matcher').value;
+  if (!name || !jd) { showResult('analyze-result', '请填写名称和 JD 文本', 'status-err'); return; }
+  showResult('analyze-result', '分析中...', 'loading');
+  try {
+    const r = await api('/analyze', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({jd_text: jd, name, matcher}) });
+    let html = `<strong>Job type:</strong> ${r.job_type}<br>`;
+    if (r.not_writable.length) html += `<strong>Not writable:</strong> ${r.not_writable.join(', ')}<br>`;
+    if (r.strong_matches.length) html += `<strong>Strong matches:</strong> ${r.strong_matches.join(', ')}<br>`;
+    if (r.weak_matches.length) html += `<strong>Weak matches:</strong> ${r.weak_matches.join(', ')}<br>`;
+    html += `<em>JD saved: ${r.jd_path}</em>`;
+    showResult('analyze-result', html, 'status-ok');
+  } catch (e) { showResult('analyze-result', e.message, 'status-err'); }
+}
+
+async function loadApplications() {
+  showResult('applications-result', '加载中...', 'loading');
+  try {
+    const r = await api('/applications');
+    if (!r.applications.length) { showResult('applications-result', '暂无申请记录', ''); return; }
+    let html = '<table><thead><tr><th>名称</th><th>状态</th></tr></thead><tbody>';
+    r.applications.forEach(a => { html += `<tr><td>${a.name}</td><td>${a.state}</td></tr>`; });
+    html += '</tbody></table>';
+    document.getElementById('applications-result').innerHTML = html;
+  } catch (e) { showResult('applications-result', e.message, 'status-err'); }
+}
+
+async function loadTrends() {
+  showResult('trends-result', '加载中...', 'loading');
+  try {
+    const r = await api('/career-trends');
+    let html = `<strong>共 ${r.total_jds} 份 JD</strong> | ${r.snapshot_count} 次快照<br><br>`;
+    if (r.high.length) {
+      html += '<strong style="color:var(--danger)">🔴 优先补（≥2 份 JD）</strong><br>';
+      r.high.forEach(t => { html += `<span class="badge badge-high">${t.tech}</span> (${t.count} 份: ${t.jds.join(', ')})<br>`; });
+      html += '<br>';
+    }
+    if (r.low.length) {
+      html += '<strong style="color:var(--warning)">🟡 考虑补（1 份）</strong><br>';
+      r.low.forEach(t => { html += `<span class="badge badge-low">${t.tech}</span> (${t.jds.join(', ')})<br>`; });
+    }
+    document.getElementById('trends-result').innerHTML = html;
+  } catch (e) { showResult('trends-result', e.message, 'status-err'); }
+}
+
+async function loadMastery() {
+  const factId = document.getElementById('mastery-fact-id').value.trim();
+  showResult('mastery-result', '加载中...', 'loading');
+  try {
+    const path = factId ? `/mastery-history?fact_id=${encodeURIComponent(factId)}` : '/mastery-history';
+    const r = await api(path);
+    document.getElementById('mastery-result').innerHTML = `<pre>${r.rendered}</pre>`;
+  } catch (e) { showResult('mastery-result', e.message, 'status-err'); }
+}
+
+async function recordFeedback() {
+  const application = document.getElementById('fb-name').value.trim();
+  const fact_id = document.getElementById('fb-fact-id').value.trim();
+  const question = document.getElementById('fb-question').value.trim();
+  const note = document.getElementById('fb-note').value.trim();
+  if (!application || !fact_id || !question) { showResult('interview-record-result', '请填写申请名称、Fact ID 和问题', 'status-err'); return; }
+  showResult('interview-record-result', '记录中...', 'loading');
+  try {
+    const r = await api('/record-interview', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({application, fact_id, question, note}) });
+    showResult('interview-record-result', `已记录: ${r.date} [${r.fact_id}]`, 'status-ok');
+  } catch (e) { showResult('interview-record-result', e.message, 'status-err'); }
+}
+
+async function loadFeedback() {
+  const name = document.getElementById('fb-list-name').value.trim();
+  if (!name) { showResult('interview-list-result', '请填写申请名称', 'status-err'); return; }
+  showResult('interview-list-result', '加载中...', 'loading');
+  try {
+    const r = await api(`/interview-feedback/${encodeURIComponent(name)}`);
+    document.getElementById('interview-list-result').innerHTML = `<pre>${r.rendered}</pre>`;
+  } catch (e) { showResult('interview-list-result', e.message, 'status-err'); }
+}
+</script>
+</body>
+</html>

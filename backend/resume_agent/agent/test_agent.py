@@ -5,6 +5,9 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+from tempfile import TemporaryDirectory
+
 from . import memory
 from .graph import build_agent
 from .tools import search_facts, verify_fact
@@ -37,14 +40,18 @@ def test_verify_fact_missing() -> None:
 
 
 def test_memory_roundtrip() -> None:
-    memory.save_preference("_test_key", "_test_value")
-    try:
-        _assert(memory.recall_preference("_test_key") == "_test_value", "长期记忆写入/召回失败")
-        _assert("_test_key" in memory.list_preferences(), "长期记忆列表失败")
-    finally:
-        data = memory.list_preferences()
-        data.pop("_test_key", None)
-        memory._save(data)
+    original_path = memory.MEMORY_PATH
+    with TemporaryDirectory(prefix="truthful-resume-agent-memory-") as temp_dir:
+        memory.MEMORY_PATH = Path(temp_dir) / "agent_memory.json"
+        try:
+            memory.save_preference("_test_key", "_test_value")
+            _assert(memory.recall_preference("_test_key") == "_test_value", "长期记忆写入/召回失败")
+            _assert("_test_key" in memory.list_preferences(), "长期记忆列表失败")
+            deleted = memory.delete_preference("_test_key")
+            _assert(deleted, "delete_preference 应返回 True")
+            _assert(memory.recall_preference("_test_key") is None, "删除后 recall 应返回 None")
+        finally:
+            memory.MEMORY_PATH = original_path
 
 
 def test_graph_compiles() -> None:

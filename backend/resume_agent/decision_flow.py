@@ -4,16 +4,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 import re
 
+from .authorization_store import AUTHORIZATION_LABELS
 from .fragments import ResumeFragment, load_fragments
 from .review_parser import INTERACTIVE_CONFIRMATION, write_review_state
 
 
-CHOICE_LABELS = {
-    "A": "A 事实准确且能解释核心版，允许进入候选池",
-    "B": "B 事实准确但只允许保守版进入候选池",
-    "C": "C 事实基本准确但目前不愿承担追问风险",
-    "D": "D 事实记录有误，需要回查事实库",
-}
+CHOICE_LABELS = AUTHORIZATION_LABELS
 
 
 FACT_ID_RE = re.compile(r"^- fact_id:\s*`([^`]+)`", re.MULTILINE)
@@ -141,8 +137,9 @@ def run_interactive_decision(
                 print(f"当前选择：{_terminal_safe(current.group(0).removeprefix('- mastery_check:').strip())}")
         _print_wording_options(_find_fragment(project_root, fact_ids))
         print("\n判断标准：")
-        print("- facts.json 记录用户确认过的经历；这里只确认文案真实性和你愿意承担的追问范围。")
-        print("- A/B 进入候选池，不代表一定写入；Agent 会结合 JD 和版面容量生成选材报告。")
+        print("- 这里只确认事实与对应文案是否准确、是否授权用于简历；不考察当前面试准备程度。")
+        print("- 授权按内容哈希跨申请复用；事实或 bullet 实质变化后才会重新询问。")
+        print("- A/B 进入候选池，不代表一定写入；系统会结合 JD 和版面容量选材。")
         for label in CHOICE_LABELS.values():
             print(f"- {label}")
 
@@ -158,18 +155,18 @@ def run_interactive_decision(
         section = MASTERY_LINE_RE.sub(f"- mastery_check: `{CHOICE_LABELS[choice]}`", section, count=1)
         stop_after_current = False
         if collect_notes:
-            can_explain, stop_after_current = _read_optional_text("你现在能讲清楚什么？直接回车可跳过：")
+            can_explain, stop_after_current = _read_optional_text("授权备注（可选）：")
             if stop_after_current:
                 cannot_explain = ""
             else:
-                cannot_explain, stop_after_current = _read_optional_text("还有什么讲不清楚/需要复习？直接回车可跳过：")
+                cannot_explain, stop_after_current = _read_optional_text("需要修正或保留的边界（可选）：")
         else:
             can_explain = ""
             cannot_explain = ""
         if can_explain:
-            section = _replace_field(section, "what_i_can_explain", can_explain)
+            section = _replace_field(section, "authorization_note", can_explain)
         if cannot_explain:
-            section = _replace_field(section, "what_i_cannot_explain_yet", cannot_explain)
+            section = _replace_field(section, "correction_or_boundary_note", cannot_explain)
         intensity = "strong" if choice == "A" else "conservative" if choice == "B" else "blocked"
         section = _replace_field(section, "allowed_resume_intensity", intensity)
         section = _replace_field(section, "confirmed_via", f"`{INTERACTIVE_CONFIRMATION}`")

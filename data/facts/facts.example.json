@@ -52,7 +52,7 @@
       "benchmark",
       "AI Coding"
     ],
-    "summary": "As a final internship task, built and submitted a tested, AI-Coding-assisted Clarabel.cpp integration MVP for HiGHS covering LP/QP data mapping, solution write-back, standalone and MIP root-LP routing, KKT quality gating, simplex fallback, targeted tests, regression checks, and a scoped SCUC benchmark.",
+    "summary": "As a final internship task, built and submitted a tested, AI-Coding-assisted Clarabel.cpp integration MVP in a HiGHS fork covering LP/QP data mapping, solution write-back, standalone and MIP root-LP routing, KKT quality gating, simplex fallback, targeted tests, regression checks, and a scoped SCUC benchmark.",
     "boundaries": [
       "Repository artifacts prove the MVP exists but do not prove independent authorship of every line.",
       "Benchmark results are limited to the recorded instances and configuration.",
@@ -60,6 +60,38 @@
       "Complete MVP refers to the agreed LP/QP and MIP-root integration scope; direct conic-problem APIs and broader cone support were deferred."
     ],
     "risk": "high"
+  },
+  {
+    "id": "intern_scip_heuristic_analysis",
+    "title": "Optimization internship: SCIP heuristic analysis and RENS implementation",
+    "source_file": "data/sample_profile.md",
+    "source_section": "Desensitized Internship A",
+    "fact_type": "internship",
+    "keywords": [
+      "SCIP",
+      "HiGHS",
+      "MIP heuristics",
+      "Shifting",
+      "RENS",
+      "Farkas Diving",
+      "Pscost Diving",
+      "data-structure mapping",
+      "architecture analysis",
+      "mathematical abstraction",
+      "MPS",
+      "MIPLIB",
+      "C++",
+      "Claude Code"
+    ],
+    "summary": "Analyzed four SCIP MIP heuristics against HiGHS and produced data-structure mappings, architecture-difference analysis, mathematical abstractions, and flow diagrams. Implemented and tested only a SCIP-style RENS heuristic on HiGHS v1.12.0 against recorded MPS/MIPLIB cases.",
+    "boundaries": [
+      "The SCIP-style RENS implementation was never committed or preserved after the version switch; only analysis documents, code excerpts, and test logs remain.",
+      "HiGHS already ships a separate native RENS implementation.",
+      "Shifting, Farkas Diving, and Pscost Diving were analyzed and abstracted, not implemented.",
+      "AI Coding assistance was used; do not claim independent authorship of every line.",
+      "Recorded tests do not establish production solver performance."
+    ],
+    "risk": "medium"
   },
   {
     "id": "intern_data_automation",
@@ -96,9 +128,15 @@
       "browser automation",
       "web chat",
       "multimodal",
+      "multimodal application",
+      "多模态应用",
+      "多模态",
+      "多模态项目",
       "Prompt",
       "JSON",
       "business rules",
+      "异常回退",
+      "问题定位",
       "MVP"
     ],
     "summary": "Built an ASP.NET Core/C# warehouse-recommendation MVP whose candidate-confirmed runtime path uploads images to object storage, sends them to a logged-in multimodal web chat through browser automation, constrains item and dimension fields as JSON, and applies server-side warehouse rules with live-animal blocking, custom validation, and manual fallback.",
@@ -112,29 +150,35 @@
   },
   {
     "id": "project_chinese_learning_mvp",
-    "title": "AI Chinese learning mini program MVP",
+    "title": "AI Chinese learning mini program and Coze agents",
     "source_file": "data/sample_profile.md",
     "source_section": "Desensitized Project A",
     "fact_type": "project",
     "keywords": [
-      "Cursor",
-      "AI programming tools",
-      "mini-program",
-      "MVP",
+      "WeChat mini program",
+      "front-end development",
+      "authentication API integration",
+      "接口联调",
+      "user authentication",
       "AI application",
-      "user-facing",
-      "interface",
+      "user-facing product features",
+      "intelligent dialogue",
+      "AI programming tools",
       "database fields",
+      "debugging",
       "Coze",
       "Agent",
-      "intelligent dialogue",
-      "Prompt"
+      "Prompt Engineering",
+      "essay correction",
+      "leveled dialogue"
     ],
-    "summary": "Used Cursor to convert UI designs into mini-program demo pages; understood basic login/registration interfaces and database fields; used Claude-generated prompts and Coze for demo agents.",
+    "summary": "As a primary technical team member, developed login, registration, learning-center, and child pages for a WeChat mini program; participated in authentication API integration and fixed mismatches across variable names, database fields, and page references. Translated essay-correction and learner-level dialogue requirements into reviewed prompts and configured the corresponding Coze agents.",
     "boundaries": [
+      "AI Coding tools assisted page implementation and prompt drafting.",
       "Later completion involved external development support.",
       "Do not claim full production system ownership.",
-      "Do not claim complex custom Agent architecture."
+      "The authentication flow was not load-tested or production-validated.",
+      "The Coze work was prompt and platform configuration, not a custom multi-node Agent architecture."
     ],
     "risk": "medium"
   },
@@ -146,19 +190,32 @@
     "fact_type": "project",
     "keywords": [
       "DeepSeek API",
+      "DeepSeek-Chat",
+      "DALL-E 3",
+      "ChatGPT Images",
+      "gpt-image-2",
       "model API",
+      "大模型 API 集成",
       "Prompt Engineering",
       "JSON",
       "content generation",
+      "image generation",
+      "multimodal application",
+      "多模态应用",
+      "多模态",
+      "多模态项目",
       "effect evaluation",
+      "效果评估",
+      "评测基线",
       "CLIP",
       "evaluation",
       "ablation"
     ],
-    "summary": "Built a pipeline from Chinese text to emotion JSON to visual generation conditions; designed prompt compression; evaluated image-text alignment with CLIP ViT-B/32 across Baseline, Partial, and Full settings.",
+    "summary": "Built a pipeline using DeepSeek-Chat for structured emotion extraction and DALL-E 3 / ChatGPT Images (gpt-image-2) for image generation, mapping Chinese text to emotion JSON and then visual generation conditions. Designed prompt compression and evaluated image-text alignment on 10 samples with CLIP ViT-B/32: Baseline 0.2530, Partial 0.2163, and Full 0.2593; Full beat Partial on 9/10 samples but improved only 2.5% over the Baseline mean and beat Baseline on 5/10 samples.",
     "boundaries": [
       "Application/evaluation project, not large-scale model training.",
-      "Evaluation rigor depends on sample size and experiment details."
+      "The CLIP evaluation used 10 samples and a Wilcoxon signed-rank analysis; treat the results as exploratory rather than a statistically conclusive performance claim.",
+      "Full improved the mean CLIP score by only 2.5% over Baseline and beat Baseline on 5/10 samples; do not claim a broad or significant improvement."
     ],
     "risk": "high"
   },
@@ -199,9 +256,13 @@
       "Markdown",
       "HTML",
       "LaTeX",
-      "DeepSeek API"
+      "DeepSeek API",
+      "FastAPI",
+      "gap-check",
+      "career-trends",
+      "data-driven layout"
     ],
-    "summary": "Built a local Python CLI that saves public JDs, matches them against a structured personal fact bank, generates match reports and review sheets, requires candidate-run A/B/C/D confirmation before resume generation, and outputs Markdown/HTML JD insight reports plus LaTeX resume drafts.",
+    "summary": "Built a local Python CLI and FastAPI Web UI that save public JDs, match them against a structured personal fact bank, generate match reports and review sheets, require candidate-run A/B/C/D confirmation before resume generation, and output Markdown/HTML JD insight reports plus LaTeX resume drafts. The CLI includes analyze, gap-check, and career-trends workflows, while resume ordering and section limits are separated into configuration and selected by job type.",
     "boundaries": [
       "Personal/local CLI workflow, not a multi-user SaaS product.",
       "Does not autonomously decide whether an experience is true; the candidate must run decide and confirm A/B/C/D.",
@@ -222,6 +283,8 @@
       "vector database",
       "向量数据库",
       "semantic retrieval",
+      "Chunking",
+      "fact chunking",
       "embedding",
       "fastembed",
       "DeepSeek API",
@@ -232,10 +295,45 @@
     "summary": "Replaced a JSON embedding cache with a local embedded Qdrant vector database for fact-chunk semantic retrieval, then built a bounded RAG phrasing step in explain-jd: retrieved JD-matched facts are sent to DeepSeek for phrasing candidates, and each candidate is rejected unless its fact_id is in the matched set and a separate boundary check confirms the sentence does not exceed the cited fact.",
     "boundaries": [
       "Local embedded Qdrant collection over a small personal fact bank, not large-scale vector database tuning.",
+      "Chunking is one structured fact record per chunk; the project does not implement long-document parsing, recursive splitting, or a reranking stage.",
+      "fastembed uses an ONNX-backed embedding runtime internally, but this project does not include direct model conversion, quantization, edge deployment, or ONNX Runtime performance tuning.",
       "RAG is used for bounded phrasing candidates in a JD insight report, not for autonomously generating final resume bullets.",
-      "No LangChain, LlamaIndex, MCP, vLLM, Ollama, KV-cache optimization, SFT, or RL implementation.",
+      "No LlamaIndex, MCP, vLLM, Ollama, KV-cache optimization, SFT, or RL implementation.",
       "Does not implement a production knowledge-base system with external document ingestion, access control, monitoring, or multi-user serving."
     ],
     "risk": "high"
+  },
+  {
+    "id": "project_truthful_resume_agent_agent",
+    "title": "Truthful Resume Agent: LangGraph conversational fact agent",
+    "source_file": "backend/resume_agent/agent",
+    "source_section": "Public conversational agent workflow",
+    "fact_type": "project",
+    "keywords": [
+      "LangChain",
+      "LangGraph",
+      "StateGraph",
+      "Agent",
+      "tool calling",
+      "工具调用",
+      "search_facts",
+      "verify_fact",
+      "MemorySaver",
+      "short-term memory",
+      "long-term memory",
+      "多轮记忆",
+      "记忆",
+      "DeepSeek API",
+      "retrieve generate verify reflect"
+    ],
+    "summary": "Built a LangChain and LangGraph conversational agent over the fact bank with a retrieve-to-generate-to-verify-to-reflect StateGraph loop, fact search and verification tools, in-memory short-term checkpoints, and JSON-backed long-term preferences.",
+    "boundaries": [
+      "Personal/local fact Q&A agent, not a production assistant with multi-user serving, access control, or monitoring.",
+      "The agent retrieves and explains existing facts; it does not write facts, review decisions, or resume wording.",
+      "The verification node is an LLM judgment rather than cryptographic proof.",
+      "MemorySaver is in-memory short-term state; cross-process preferences use a separate local JSON file.",
+      "No persistence server or LangSmith tracing is implemented."
+    ],
+    "risk": "medium"
   }
 ]

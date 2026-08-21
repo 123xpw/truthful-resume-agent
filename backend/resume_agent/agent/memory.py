@@ -31,5 +31,15 @@ def recall_preference(key: str) -> str | None:
     return _load().get(key)
 
 
+def delete_preference(key: str) -> bool:
+    """删除指定偏好，返回是否确实删除了一条。"""
+    data = _load()
+    if key not in data:
+        return False
+    del data[key]
+    _save(data)
+    return True
+
+
 def list_preferences() -> dict:
     return _load()

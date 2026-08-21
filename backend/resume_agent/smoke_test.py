@@ -10,11 +10,22 @@ import tempfile
 from unittest.mock import patch
 
 from .analyzer import AnalysisResult, FactMatch, build_recommendations, merge_keyword_floor
+from .authorization_store import (
+    apply_reusable_authorizations,
+    authorization_path,
+    record_authorizations_from_review,
+)
 from .cli import main as cli_main
 from .decision_flow import run_interactive_decision
 from .eval_matchers import score_matches
 from .fact_store import load_facts
-from .fragments import load_fragments
+from .fragments import ResumeFragment, load_fragments
+from .gap_trends import diff_against_last, load_snapshots, record_gap_snapshot
+from .interview_feedback import (
+    append_boundary_to_facts,
+    load_feedback,
+    record_feedback,
+)
 from .jd_insight import (
     BONUS_HEADING,
     HARD_REQUIREMENT_HEADING,
@@ -26,12 +37,18 @@ from .jd_insight import (
     llm_phrasing_candidates,
 )
 from .llm_client import LLMNotConfigured, chat_completion, get_api_key
+from .mastery_history import (
+    load_mastery_history,
+    record_mastery_snapshot,
+    render_mastery_history,
+)
 from .outcomes import default_outcome_path, load_outcomes
 from .profile import EducationProfile, ResumeProfile, SkillProfile, load_profile
 from .quality import check_resume_quality
 from .review_parser import count_pending_review_items, parse_review_mastery, write_review_state
 from .review import render_review_sheet
 from .resume_generator import (
+    _escape_unescaped_percent,
     _choose_internship_order,
     _choose_project_order,
     _select_profile_skills,
@@ -51,20 +68,28 @@ def _assert(condition: bool, message: str) -> None:
         raise AssertionError(message)
 
 
+def _assert_percent_escaping() -> None:
+    _assert(_escape_unescaped_percent("提升 2.5%") == r"提升 2.5\%", "bare percent was not escaped")
+    _assert(_escape_unescaped_percent(r"精度 50\%") == r"精度 50\%", "escaped percent was double-escaped")
+
+
 def _assert_internship_composite_selection() -> None:
+    fragments = load_fragments()
     combined = {
         "intern_optimization_ai_coding",
         "intern_solver_integration_clarabel",
         "intern_optimization_combined",
+        "intern_scip_heuristic_analysis",
         "intern_data_automation",
     }
-    order = _choose_internship_order(combined)
+    order = _choose_internship_order(combined, fragments)
     _assert(order.count("intern_optimization_combined") == 1, "combined internship was not selected")
     _assert("intern_optimization_ai_coding" not in order, "combined internship duplicated AI Coding source")
     _assert("intern_solver_integration_clarabel" not in order, "combined internship duplicated Clarabel source")
+    _assert("intern_scip_heuristic_analysis" not in order, "combined internship duplicated SCIP fact slice")
     _assert("intern_data_automation" in order, "unrelated internship was suppressed")
 
-    standalone = _choose_internship_order({"intern_solver_integration_clarabel"})
+    standalone = _choose_internship_order({"intern_solver_integration_clarabel"}, fragments)
     _assert(
         standalone == ["intern_solver_integration_clarabel"],
         "standalone Clarabel internship was not selectable",
@@ -72,12 +97,13 @@ def _assert_internship_composite_selection() -> None:
 
 
 def _assert_project_selection_does_not_silently_drop_confirmed() -> None:
+    fragments = load_fragments()
     confirmed = {
         "project_truthful_resume_agent",
         "project_emotion_pixel_eval",
         "project_chinese_learning_mvp",
     }
-    order = _choose_project_order("AI application / Agent engineering", confirmed)
+    order = _choose_project_order("AI application / Agent engineering", confirmed, fragments)
     _assert(order == [
         "project_truthful_resume_agent",
         "project_emotion_pixel_eval",
@@ -104,10 +130,11 @@ def _assert_project_selection_does_not_silently_drop_confirmed() -> None:
     future_order = _choose_project_order(
         "AI application / Agent engineering",
         {"project_truthful_resume_agent", "project_future"},
+        fragments,
     )
     _assert(future_order[-1] == "project_future", "new project IDs were silently dropped")
     _assert(
-        _choose_internship_order({"intern_future"}) == ["intern_future"],
+        _choose_internship_order({"intern_future"}, fragments) == ["intern_future"],
         "new internship IDs were silently dropped",
     )
 
@@ -238,11 +265,13 @@ def _assert_quality_rejects_overfilled_selection(temp_root: Path) -> None:
 \begin{resumeItems}\item seven\item eight\end{resumeItems}
 \projectEntry{2024}{P3}{}{}
 \begin{resumeItems}\item nine\item ten\end{resumeItems}
+\projectEntry{2023}{P4}{}{}
+\begin{resumeItems}\item eleven\item twelve\end{resumeItems}
 """,
         encoding="utf-8",
     )
     quality = check_resume_quality(review_path, tex_path)
-    _assert(not quality.passed, "one-page policy accepted three project entries")
+    _assert(not quality.passed, "one-page policy accepted four project entries")
     _assert(
         any("too many project entries" in reason for reason in quality.reasons),
         "overfilled selection did not explain how to revise it",
@@ -259,6 +288,7 @@ def _assert_selection_is_id_restricted_and_capacity_bounded(temp_root: Path) -> 
         "project_truthful_resume_agent",
         "project_emotion_pixel_eval",
         "project_chinese_learning_mvp",
+        "project_dl_learning_lab",
     ]
     selected_levels = {fragment_id: "A" for fragment_id in ordered_ids}
     result = AnalysisResult(
@@ -275,7 +305,8 @@ def _assert_selection_is_id_restricted_and_capacity_bounded(temp_root: Path) -> 
         "intern_data_automation",
         "intern_csharp_ai_mvp",
         "project_truthful_resume_agent",
-        "project_emotion_pixel_eval"
+        "project_emotion_pixel_eval",
+        "project_chinese_learning_mvp"
       ]
     }"""
     with patch("backend.resume_agent.selection.chat_completion", return_value=valid_response):
@@ -288,9 +319,9 @@ def _assert_selection_is_id_restricted_and_capacity_bounded(temp_root: Path) -> 
             result,
             use_llm=True,
         )
-    _assert(len(plan.selected_ids) == 5, "restricted selection did not choose the 3+2 capacity")
+    _assert(len(plan.selected_ids) == 6, "restricted selection did not choose the 3+3 capacity")
     _assert(
-        plan.omitted_ids == ("project_chinese_learning_mvp",),
+        plan.omitted_ids == ("project_dl_learning_lab",),
         "restricted selection did not disclose the omitted eligible project",
     )
 
@@ -398,6 +429,13 @@ def _assert_jd_insight_not_writable_classification() -> None:
     _assert(tiers["LangChain"] == "both", "hard+bonus not-writable term misclassified")
     _assert(tiers["vLLM"] == "unknown", "unlocated not-writable term misclassified")
 
+    alternative_tiers = _classify_not_writable(
+        {"Go": ""},
+        hard_requirements=["掌握 Java、C++、Python、Go 中的至少一门语言，Go 背景优先。"],
+        bonus_points=[],
+    )
+    _assert(alternative_tiers["Go"] == "bonus", "alternative/preferred language misclassified as hard")
+
 
 def _assert_not_writable_terms_are_evidence_checks() -> None:
     jd_text = "要求具备 RAG 和向量数据库 经验，也熟悉 LangChain。"
@@ -493,6 +531,86 @@ def _assert_review_parser_supports_composite_fact_blocks(temp_root: Path) -> Non
     _assert(mastery == {"source_a": "B", "source_b": "B"}, "composite review block did not confirm both source facts")
 
 
+def _assert_resume_authorization_reuse_is_content_bound(temp_root: Path) -> None:
+    """授权可跨申请复用；检索元数据变化不重问，事实/文案变化重问。"""
+    auth_root = temp_root / "authorization_reuse"
+    shutil.copytree(temp_root / "data" / "facts", auth_root / "data" / "facts")
+    shutil.copytree(
+        temp_root / "data" / "resume_fragments",
+        auth_root / "data" / "resume_fragments",
+    )
+
+    first_review = auth_root / "data" / "outputs" / "first" / "review_sheet.md"
+    first_review.parent.mkdir(parents=True, exist_ok=True)
+    first_review.write_text(
+        """# Review
+
+### Chinese learning project
+
+- fact_id: `project_chinese_learning_mvp`
+- mastery_check: `A 事实与核心版文案准确，授权用于简历`
+- allowed_options: A/B/C/D
+- allowed_resume_intensity: strong
+- confirmed_via: `interactive_cli`
+- confirmed_at: `2026-08-20T00:00:00+00:00`
+""",
+        encoding="utf-8",
+    )
+    recorded = record_authorizations_from_review(auth_root, first_review)
+    _assert(recorded == 1, f"expected one reusable authorization, got {recorded}")
+    _assert(authorization_path(auth_root).exists(), "authorization store was not created")
+
+    second_review = auth_root / "data" / "outputs" / "second" / "review_sheet.md"
+    second_review.parent.mkdir(parents=True, exist_ok=True)
+    pending_review = """# Review
+
+### Chinese learning project
+
+- fact_id: `project_chinese_learning_mvp`
+- mastery_check: `待确认`
+- allowed_options: A/B/C/D
+- allowed_resume_intensity:
+"""
+    second_review.write_text(pending_review, encoding="utf-8")
+    reused = apply_reusable_authorizations(auth_root, second_review)
+    _assert(reused == 1, f"unchanged authorization was not reused: {reused}")
+    _assert(count_pending_review_items(second_review) == 0, "reused authorization remained pending")
+    _assert(
+        parse_review_mastery(second_review) == {"project_chinese_learning_mvp": "A"},
+        "reused authorization did not remain generator-eligible",
+    )
+
+    import json as _json
+
+    facts_path = auth_root / "data" / "facts" / "facts.json"
+    facts = _json.loads(facts_path.read_text(encoding="utf-8"))
+    fact = next(item for item in facts if item["id"] == "project_chinese_learning_mvp")
+    fact["keywords"].append("retrieval-only-keyword")
+    facts_path.write_text(_json.dumps(facts, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    keyword_review = auth_root / "data" / "outputs" / "keyword_only" / "review_sheet.md"
+    keyword_review.parent.mkdir(parents=True, exist_ok=True)
+    keyword_review.write_text(pending_review, encoding="utf-8")
+    reused_after_keyword_change = apply_reusable_authorizations(auth_root, keyword_review)
+    _assert(
+        reused_after_keyword_change == 1,
+        "retrieval-only fact keyword change incorrectly invalidated wording authorization",
+    )
+
+    fragments_path = auth_root / "data" / "resume_fragments" / "fragments.json"
+    fragments = _json.loads(fragments_path.read_text(encoding="utf-8"))
+    fragment = next(item for item in fragments if item["fact_id"] == "project_chinese_learning_mvp")
+    fragment["bullets"]["A"][0] += " changed"
+    fragments_path.write_text(_json.dumps(fragments, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    changed_review = auth_root / "data" / "outputs" / "changed" / "review_sheet.md"
+    changed_review.parent.mkdir(parents=True, exist_ok=True)
+    changed_review.write_text(pending_review, encoding="utf-8")
+    reused_after_change = apply_reusable_authorizations(auth_root, changed_review)
+    _assert(reused_after_change == 0, "changed fragment incorrectly reused an old authorization")
+    _assert(count_pending_review_items(changed_review) == 1, "changed fragment did not require confirmation")
+
+
 def _assert_review_renders_composite_across_match_levels() -> None:
     cli_fact = Fact(
         id="project_truthful_resume_agent_cli",
@@ -529,6 +647,7 @@ def _assert_review_renders_composite_across_match_levels() -> None:
     )
     _assert(review.count("- fact_id: `project_truthful_resume_agent_cli`") == 1, "CLI source fact missing")
     _assert(review.count("- fact_id: `project_truthful_resume_agent_rag_qdrant`") == 1, "RAG source fact missing")
+    _assert(review.count("- fact_id: `project_truthful_resume_agent_agent`") == 1, "Agent source fact missing")
     _assert(review.count("- mastery_check: `待确认`") == 1, "composite strong/weak split should ask once")
 
 
@@ -911,6 +1030,13 @@ def _write_composite_fragment_fixture(temp_root: Path) -> None:
 - mastery_check: `B smoke confirmed`
 - confirmed_via: `interactive_cli`
 - confirmed_at: `2000-01-01T00:00:00+00:00`
+
+### Truthful Resume Agent conversational agent
+
+- fact_id: `project_truthful_resume_agent_agent`
+- mastery_check: `B smoke confirmed`
+- confirmed_via: `interactive_cli`
+- confirmed_at: `2000-01-01T00:00:00+00:00`
 """,
         encoding="utf-8",
     )
@@ -922,6 +1048,7 @@ def run_smoke() -> None:
         _copy_required_data(temp_root)
 
         _assert_internship_composite_selection()
+        _assert_percent_escaping()
         _assert_project_selection_does_not_silently_drop_confirmed()
         _assert_profile_skills_require_confirmed_fact_sources()
         _assert_confirmed_decision_can_be_revisited(temp_root)
@@ -933,6 +1060,7 @@ def run_smoke() -> None:
         _assert_keyword_floor_merges_with_semantic_matches()
         _assert_matcher_metrics_count_false_positives()
         _assert_review_parser_supports_composite_fact_blocks(temp_root)
+        _assert_resume_authorization_reuse_is_content_bound(temp_root)
         _assert_review_renders_composite_across_match_levels()
         _assert_review_expands_partially_matched_composite()
         _assert_llm_phrasing_candidates_are_advisory_and_screened()
@@ -942,6 +1070,9 @@ def run_smoke() -> None:
         _assert_llm_provider_is_configurable()
         _assert_status_rejects_stale_artifacts(temp_root)
         _assert_fact_changes_stale_review(temp_root)
+        _assert_interview_feedback_roundtrip(temp_root)
+        _assert_gap_trends_snapshot_diff(temp_root)
+        _assert_mastery_history_progression(temp_root)
 
         prepare_code, prepare_output = _run_cli(
             [
@@ -1093,7 +1224,7 @@ def run_smoke() -> None:
         tex_path = output_dir / "resume_draft.tex"
         _assert(tex_path.exists(), "finalize did not write resume_draft.tex")
         tex_text = tex_path.read_text(encoding="utf-8")
-        _assert("LangChain" not in tex_text, "not-writable LangChain leaked into generated resume")
+        _assert("LangChain" in tex_text, "fact-backed LangChain Agent evidence was omitted from generated resume")
         _assert("MCP" not in tex_text, "not-writable MCP leaked into generated resume")
         _assert(
             "补充技能：Java, MySQL, PostgreSQL" not in tex_text,
@@ -1354,6 +1485,7 @@ def run_smoke() -> None:
 
 - fact_id: `project_truthful_resume_agent_cli`
 - fact_id: `project_truthful_resume_agent_rag_qdrant`
+- fact_id: `project_truthful_resume_agent_agent`
 - mastery_check: `待确认`
 """,
             encoding="utf-8",
@@ -1386,12 +1518,110 @@ def _run_agent_tests() -> None:
         from .agent.test_agent import run_all as run_agent_tests
 
         run_agent_tests()
-    except ImportError:
-        print("跳过 agent 测试（langchain 未安装）")
+    except ImportError as exc:
+        raise RuntimeError(
+            "Agent smoke tests incomplete: install requirements and run with .venv/bin/python"
+        ) from exc
+
+
+def _assert_web_app_available() -> None:
+    """FastAPI 层至少必须可导入，避免 Web UI 改坏后 smoke 仍通过。"""
+    from .web.app import app as web_app
+
+    _assert(web_app.title == "Truthful Resume Agent", "FastAPI app title mismatch")
+
+
+def _assert_interview_feedback_roundtrip(temp_root: Path) -> None:
+    """面试反馈记录 + 读取 + 损坏 JSON 容错。"""
+    feedback = record_feedback(
+        project_root=temp_root,
+        application="smoke_test_app",
+        fact_id="intern_data_automation",
+        question="分页机制怎么实现的？",
+        note="No pagination in current implementation",
+    )
+    _assert(feedback.fact_id == "intern_data_automation", "record_feedback did not store fact_id")
+
+    items = load_feedback(temp_root, "smoke_test_app")
+    _assert(len(items) == 1, f"load_feedback returned {len(items)} items, expected 1")
+    _assert(items[0].question == "分页机制怎么实现的？", "feedback question mismatch")
+
+    # 损坏 JSON 容错
+    feedback_path = temp_root / "data" / "outputs" / "smoke_test_app" / "interview_feedback.json"
+    feedback_path.write_text("{invalid json", encoding="utf-8")
+    items = load_feedback(temp_root, "smoke_test_app")
+    _assert(items == [], "load_feedback did not handle corrupt JSON gracefully")
+
+    facts_path = temp_root / "data" / "facts" / "facts.json"
+    result = append_boundary_to_facts(
+        facts_path,
+        "intern_data_automation",
+        "Smoke-test boundary written atomically.",
+    )
+    _assert(result == "written", f"append_boundary_to_facts returned {result}")
+    reloaded_facts = load_facts(facts_path)
+    updated = next(fact for fact in reloaded_facts if fact.id == "intern_data_automation")
+    _assert(
+        "Smoke-test boundary written atomically." in updated.boundaries,
+        "atomic boundary update was not persisted",
+    )
+    _assert(not facts_path.with_name("facts.json.tmp").exists(), "atomic-write temp file leaked")
+
+
+def _assert_gap_trends_snapshot_diff(temp_root: Path) -> None:
+    """缺口快照记录 + diff 对比。"""
+    # 第一次快照
+    record_gap_snapshot(temp_root, {"RAG": {"jd_a"}})
+    history = load_snapshots(temp_root)
+    _assert(len(history) == 1, f"expected 1 snapshot, got {len(history)}")
+
+    # 第二次快照：RAG 已补齐，新增 vLLM
+    record_gap_snapshot(temp_root, {"vLLM": {"jd_b"}})
+    history = load_snapshots(temp_root)
+    _assert(len(history) == 2, f"expected 2 snapshots, got {len(history)}")
+
+    current = {"vLLM": {"jd_b"}}
+    diff = diff_against_last(current, history[:-1])  # 对比第一次
+    _assert("vLLM" in diff.added, "diff did not detect newly added gap")
+    _assert("RAG" in diff.resolved, "diff did not detect resolved gap")
+
+
+def _assert_mastery_history_progression(temp_root: Path) -> None:
+    """mastery 快照记录 + 时间线渲染 + progression 标记。"""
+    # 模拟两次 mastery 快照：C → A
+    from datetime import datetime, timezone
+    from .mastery_history import MasterySnapshot
+
+    snap1 = MasterySnapshot(
+        date="2026-01-01T00:00:00+00:00",
+        application="smoke_test_app",
+        mastery={"fact_a": "C"},
+    )
+    snap2 = MasterySnapshot(
+        date="2026-02-01T00:00:00+00:00",
+        application="smoke_test_app",
+        mastery={"fact_a": "A"},
+    )
+    history_path = temp_root / "data" / "mastery_history.json"
+    import json as _json
+    from dataclasses import asdict as _asdict
+    history_path.parent.mkdir(parents=True, exist_ok=True)
+    history_path.write_text(
+        _json.dumps([_asdict(snap1), _asdict(snap2)], ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+    history = load_mastery_history(temp_root)
+    _assert(len(history) == 2, f"expected 2 mastery snapshots, got {len(history)}")
+
+    rendered = render_mastery_history(history, fact_id="fact_a")
+    _assert("improved +2" in rendered, f"progression label not rendered: {rendered}")
+    _assert("C -> A" in rendered, f"progression arrow not rendered: {rendered}")
 
 
 def main() -> int:
     run_smoke()
+    _assert_web_app_available()
     _run_agent_tests()
     print("Smoke test passed.")
     return 0

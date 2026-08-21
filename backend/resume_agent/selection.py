@@ -185,7 +185,7 @@ def llm_selection(
         "同时能够被事实支撑的经历。你只能返回候选列表中已有的 fragment_id，不能新增、改写或猜测经历。"
         "优先考虑：对 JD 核心职责的直接覆盖、工程深度、可展示产物、差异化和面试可解释性；"
         "降低只有浅层关键词命中、依赖外部开发支持或边界风险较高经历的优先级。"
-        "实习经历最多选择 3 项，项目经历最多选择 2 项；某栏目候选不足时全部选择。"
+        "实习经历最多选择 3 项，项目经历最多选择 3 项；某栏目候选不足时全部选择。"
         "严格输出 JSON 对象，且只包含 selected_fragment_ids 字段，例如："
         '{"selected_fragment_ids":["id1","id2"]}。\n\n'
         f"JD：\n{jd_text}\n\n候选：\n{json.dumps(candidates, ensure_ascii=False)}"

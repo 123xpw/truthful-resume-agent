@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+import re
 import shutil
 
 from .quality import ResumeQuality, check_resume_quality
@@ -10,6 +11,14 @@ from .quality import ResumeQuality, check_resume_quality
 DEFAULT_CANDIDATE = "候选人"
 DEFAULT_SCHOOL = "学校"
 DEFAULT_MAJOR = "专业"
+
+_UNSAFE_FILENAME_RE = re.compile(r'[/\\:*?"<>|\x00-\x1f]')
+
+
+def _sanitize_filename_component(value: str) -> str:
+    """清理文件名中的非法字符，防止路径穿越和非法文件名。"""
+    cleaned = _UNSAFE_FILENAME_RE.sub("_", value).strip().strip(".")
+    return cleaned or "unknown"
 
 
 @dataclass(frozen=True)
@@ -37,8 +46,13 @@ def delivery_filenames(
     school: str = DEFAULT_SCHOOL,
     major: str = DEFAULT_MAJOR,
 ) -> tuple[str, str]:
-    prefix = f"{company}_{role}" if role else company
-    pdf_name = f"{prefix}-{school}-{major}-{candidate}.pdf"
+    safe_company = _sanitize_filename_component(company)
+    safe_role = _sanitize_filename_component(role)
+    safe_candidate = _sanitize_filename_component(candidate)
+    safe_school = _sanitize_filename_component(school)
+    safe_major = _sanitize_filename_component(major)
+    prefix = f"{safe_company}_{safe_role}" if safe_role else safe_company
+    pdf_name = f"{prefix}-{safe_school}-{safe_major}-{safe_candidate}.pdf"
     tex_name = f"{prefix}.tex"
     return pdf_name, tex_name
 
@@ -70,7 +84,8 @@ def deliver_resume(
         raise DeliveryQualityError(quality)
 
     target_root = delivery_root or default_delivery_root(project_root)
-    company_dir = target_root / company
+    safe_company = _sanitize_filename_component(company)
+    company_dir = target_root / safe_company
     company_dir.mkdir(parents=True, exist_ok=True)
 
     pdf_name, tex_name = delivery_filenames(
