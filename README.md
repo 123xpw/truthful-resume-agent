@@ -3,6 +3,7 @@
 [English](README.md) | [简体中文](README.zh-CN.md)
 
 [![CI](https://github.com/123xpw/truthful-resume-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/123xpw/truthful-resume-agent/actions/workflows/ci.yml)
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
 
 **An evidence-grounded local workflow for turning a job description into a
 defensible, traceable resume.**
@@ -325,3 +326,7 @@ canonical registration remain CLI operations in the current MVP.
 Design details are in [`docs/technical_design.md`](docs/technical_design.md),
 [`docs/risk_policy.md`](docs/risk_policy.md), and
 [`docs/evaluation_plan.md`](docs/evaluation_plan.md).
+
+## License
+
+Licensed under the [Apache License 2.0](LICENSE).

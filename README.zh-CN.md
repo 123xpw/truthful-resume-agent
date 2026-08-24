@@ -3,6 +3,7 @@
 [English](README.md) | [简体中文](README.zh-CN.md)
 
 [![CI](https://github.com/123xpw/truthful-resume-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/123xpw/truthful-resume-agent/actions/workflows/ci.yml)
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
 
 **一套基于事实证据的本地流程，用于把岗位描述（JD）转化为可辩护、可溯源的简历。**
 
@@ -266,3 +267,7 @@ Smoke 同时支持私有运行文件名和公开 `*.example.json` 回退数据�
 打开 <http://127.0.0.1:8000> 查看 JD 分析、申请状态、缺口趋势、mastery 历史和面试反馈。当前 MVP 的授权、最终生成、AEO 和最终简历登记仍使用 CLI。
 
 设计细节见 [`docs/technical_design.md`](docs/technical_design.md)、[`docs/risk_policy.md`](docs/risk_policy.md) 和 [`docs/evaluation_plan.md`](docs/evaluation_plan.md)。
+
+## License
+
+本项目使用 [Apache License 2.0](LICENSE) 开源许可证。
