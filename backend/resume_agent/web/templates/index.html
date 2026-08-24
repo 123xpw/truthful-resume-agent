@@ -30,7 +30,7 @@
   .card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem; margin-bottom: 1rem; }
   .card h2 { font-size: 1.1rem; margin-bottom: 1rem; color: var(--accent); }
   textarea { width: 100%; min-height: 120px; padding: 0.75rem; border: 1px solid var(--border); border-radius: 6px; font-family: monospace; font-size: 0.85rem; resize: vertical; }
-  input[type="text"] { width: 100%; padding: 0.5rem; border: 1px solid var(--border); border-radius: 6px; font-size: 0.9rem; }
+  input[type="text"], input[type="date"], select { width: 100%; padding: 0.5rem; border: 1px solid var(--border); border-radius: 6px; font-size: 0.9rem; background: white; }
   button { background: var(--accent); color: white; border: none; padding: 0.5rem 1.2rem; border-radius: 6px; cursor: pointer; font-size: 0.9rem; }
   button:hover { opacity: 0.9; }
   button:disabled { opacity: 0.5; cursor: not-allowed; }
@@ -47,6 +47,22 @@
   .status-ok { background: #eafaf1; color: var(--success); }
   .status-err { background: #fadbd8; color: var(--danger); }
   .loading { color: var(--muted); font-style: italic; }
+  .token-note { padding: 0.75rem 1rem; margin-bottom: 1rem; background: #eef4ff; color: #214b85; border-left: 4px solid var(--accent); border-radius: 6px; font-size: 0.85rem; }
+  .stats-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.75rem; margin-bottom: 1rem; }
+  .stat-card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; }
+  .stat-value { font-size: 1.5rem; font-weight: 700; color: var(--accent); }
+  .stat-label { color: var(--muted); font-size: 0.8rem; }
+  .small-note { min-height: 72px; font-family: inherit; }
+  .actions { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+  .secondary-button { background: #687386; }
+  .danger-button { background: var(--danger); }
+  .compact-button { padding: 0.3rem 0.65rem; font-size: 0.78rem; }
+  .artifact-warning { color: var(--warning); font-size: 0.8rem; margin-top: 0.35rem; }
+  @media (max-width: 760px) {
+    .container { padding: 1rem; }
+    .stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    table { display: block; overflow-x: auto; }
+  }
 </style>
 </head>
 <body>
@@ -58,6 +74,7 @@
   <div class="tabs">
     <div class="tab active" data-tab="analyze">JD 分析</div>
     <div class="tab" data-tab="applications">申请列表</div>
+    <div class="tab" data-tab="outcomes">投递看板</div>
     <div class="tab" data-tab="trends">缺口趋势</div>
     <div class="tab" data-tab="mastery">Mastery 时间线</div>
     <div class="tab" data-tab="interview">面试反馈</div>
@@ -95,6 +112,64 @@
       <h2>申请列表</h2>
       <button onclick="loadApplications()">刷新</button>
       <div id="applications-result"></div>
+    </div>
+  </div>
+
+  <!-- 投递看板 -->
+  <div class="panel" id="panel-outcomes">
+    <div class="token-note"><strong>本页面不调用 LLM，记录与统计均为本地确定性操作，Token 消耗为 0。</strong></div>
+    <div class="stats-grid" id="outcome-summary">
+      <div class="stat-card"><div class="stat-value">—</div><div class="stat-label">追踪申请</div></div>
+      <div class="stat-card"><div class="stat-value">—</div><div class="stat-label">状态事件</div></div>
+      <div class="stat-card"><div class="stat-value">—</div><div class="stat-label">进入面试</div></div>
+      <div class="stat-card"><div class="stat-value">—</div><div class="stat-label">Offer</div></div>
+    </div>
+    <div class="card">
+      <h2 id="outcome-form-title">记录投递结果</h2>
+      <input type="hidden" id="outcome-event-id">
+      <datalist id="outcome-application-options"></datalist>
+      <div class="row">
+        <div>
+          <label for="outcome-application">申请名称</label><br>
+          <input type="text" id="outcome-application" list="outcome-application-options" placeholder="company_role">
+        </div>
+        <div>
+          <label for="outcome-status">当前事件</label><br>
+          <select id="outcome-status">
+            <option value="applied">已投递</option>
+            <option value="assessment">测评中</option>
+            <option value="interview">面试</option>
+            <option value="offer">Offer</option>
+            <option value="rejected">未通过</option>
+            <option value="withdrawn">主动结束</option>
+            <option value="unknown">待确认</option>
+          </select>
+        </div>
+        <div>
+          <label for="outcome-date">日期</label><br>
+          <input type="date" id="outcome-date">
+        </div>
+      </div>
+      <br>
+      <label for="outcome-resume">实际简历 PDF（可选）</label><br>
+      <select id="outcome-resume" onchange="showArtifactWarning()">
+        <option value="">不关联 PDF</option>
+      </select>
+      <div id="outcome-artifact-warning" class="artifact-warning"></div>
+      <br>
+      <label for="outcome-note">备注（只记录事实，不推断原因）</label><br>
+      <textarea id="outcome-note" class="small-note" maxlength="1000" placeholder="例如：官网状态显示评估中"></textarea>
+      <br><br>
+      <div class="actions">
+        <button onclick="saveOutcome()" id="outcome-save-button">保存记录</button>
+        <button onclick="resetOutcomeForm()" class="secondary-button" type="button">取消编辑</button>
+      </div>
+      <div id="outcome-form-result"></div>
+    </div>
+    <div class="card">
+      <h2>状态时间线</h2>
+      <button onclick="loadOutcomes()">刷新</button>
+      <div id="outcomes-result"></div>
     </div>
   </div>
 
@@ -155,19 +230,35 @@
 
 <script>
 const API = '/api';
+let outcomeEvents = [];
+let resumeArtifacts = [];
+const outcomeLabels = {
+  applied: '已投递', assessment: '测评中', interview: '面试', offer: 'Offer',
+  rejected: '未通过', withdrawn: '主动结束', unknown: '待确认'
+};
 document.querySelectorAll('.tab').forEach(tab => {
   tab.onclick = () => {
     document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
     document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
     tab.classList.add('active');
     document.getElementById('panel-' + tab.dataset.tab).classList.add('active');
+    if (tab.dataset.tab === 'outcomes') initializeOutcomeDashboard();
   };
 });
 
 async function api(path, opts = {}) {
   const res = await fetch(API + path, opts);
-  if (!res.ok) { const e = await res.json().catch(() => ({detail: res.statusText})); throw new Error(e.detail || 'Request failed'); }
+  if (!res.ok) {
+    const e = await res.json().catch(() => ({detail: res.statusText}));
+    const detail = e.detail;
+    const message = typeof detail === 'object' ? (detail.message || detail.code) : detail;
+    throw new Error(message || 'Request failed');
+  }
   return res.json();
+}
+
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[ch]));
 }
 
 function showResult(id, html, cls = '') {
@@ -202,6 +293,129 @@ async function loadApplications() {
     html += '</tbody></table>';
     document.getElementById('applications-result').innerHTML = html;
   } catch (e) { showResult('applications-result', e.message, 'status-err'); }
+}
+
+async function initializeOutcomeDashboard() {
+  if (!document.getElementById('outcome-date').value) {
+    document.getElementById('outcome-date').value = new Date().toISOString().slice(0, 10);
+  }
+  try {
+    const [applications, artifacts] = await Promise.all([api('/applications'), api('/resume-artifacts')]);
+    resumeArtifacts = artifacts.artifacts;
+    const names = new Set(applications.applications.map(item => item.name));
+    resumeArtifacts.filter(item => item.source === 'delivery').forEach(item => {
+      const relative = item.ref.slice('delivery:'.length);
+      const company = relative.split('/')[0];
+      if (company) names.add(company);
+    });
+    document.getElementById('outcome-application-options').innerHTML = [...names].sort().map(name => `<option value="${escapeHtml(name)}"></option>`).join('');
+    const stateSuffix = {candidate: '', unverified: ' ⚠ 未验证', discarded: ' ⚠ 已废弃', delivered_old: ' · 已投递旧版'};
+    document.getElementById('outcome-resume').innerHTML = '<option value="">不关联 PDF</option>' + resumeArtifacts.map(item =>
+      `<option value="${escapeHtml(item.ref)}" data-state="${escapeHtml(item.state)}">${escapeHtml(item.label + stateSuffix[item.state])}</option>`
+    ).join('');
+    await loadOutcomes();
+  } catch (e) {
+    showResult('outcomes-result', escapeHtml(e.message), 'status-err');
+  }
+}
+
+function showArtifactWarning() {
+  const select = document.getElementById('outcome-resume');
+  const state = select.selectedOptions[0]?.dataset.state;
+  const warning = state === 'unverified' ? '该文件名标记为“未验证勿投递”，请确认是否确为当时使用的版本。'
+    : state === 'discarded' ? '该文件名标记为“废弃”。' : '';
+  document.getElementById('outcome-artifact-warning').textContent = warning;
+}
+
+function renderOutcomeSummary(summary) {
+  document.getElementById('outcome-summary').innerHTML = `
+    <div class="stat-card"><div class="stat-value">${summary.tracked_applications}</div><div class="stat-label">追踪申请</div></div>
+    <div class="stat-card"><div class="stat-value">${summary.event_count}</div><div class="stat-label">状态事件</div></div>
+    <div class="stat-card"><div class="stat-value">${summary.interview_or_offer_count}</div><div class="stat-label">进入面试·${(summary.interview_rate * 100).toFixed(0)}%</div></div>
+    <div class="stat-card"><div class="stat-value">${summary.ever_by_status.offer}</div><div class="stat-label">Offer·${(summary.offer_rate * 100).toFixed(0)}%</div></div>`;
+}
+
+async function loadOutcomes() {
+  showResult('outcomes-result', '加载中...', 'loading');
+  try {
+    const r = await api('/outcomes');
+    outcomeEvents = r.events;
+    renderOutcomeSummary(r.summary);
+    if (!outcomeEvents.length) {
+      showResult('outcomes-result', '暂无投递记录', '');
+      return;
+    }
+    let html = '<table><thead><tr><th>日期</th><th>申请</th><th>状态</th><th>PDF</th><th>备注</th><th>操作</th></tr></thead><tbody>';
+    outcomeEvents.forEach(item => {
+      const digest = item.resume_sha256 ? item.resume_sha256.slice(0, 12) : '—';
+      const pdf = item.resume_name ? `${escapeHtml(item.resume_name)}<br><small>${digest}</small>` : '—';
+      html += `<tr><td>${escapeHtml(item.date)}</td><td>${escapeHtml(item.application)}</td><td>${escapeHtml(outcomeLabels[item.status] || item.status)}</td><td>${pdf}</td><td>${escapeHtml(item.note)}</td><td><div class="actions"><button class="compact-button" onclick="editOutcome('${escapeHtml(item.event_id)}')">编辑</button><button class="compact-button danger-button" onclick="deleteOutcomeEvent('${escapeHtml(item.event_id)}')">删除</button></div></td></tr>`;
+    });
+    html += '</tbody></table>';
+    document.getElementById('outcomes-result').innerHTML = html;
+  } catch (e) { showResult('outcomes-result', escapeHtml(e.message), 'status-err'); }
+}
+
+async function saveOutcome() {
+  const eventId = document.getElementById('outcome-event-id').value;
+  const payload = {
+    application: document.getElementById('outcome-application').value.trim(),
+    status: document.getElementById('outcome-status').value,
+    date: document.getElementById('outcome-date').value,
+    resume_ref: document.getElementById('outcome-resume').value || null,
+    note: document.getElementById('outcome-note').value.trim()
+  };
+  if (!payload.application || !payload.date) {
+    showResult('outcome-form-result', '请填写申请名称和日期', 'status-err');
+    return;
+  }
+  showResult('outcome-form-result', '保存中...', 'loading');
+  try {
+    await api(eventId ? `/outcomes/${encodeURIComponent(eventId)}` : '/outcomes', {
+      method: eventId ? 'PUT' : 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(payload)
+    });
+    resetOutcomeForm();
+    showResult('outcome-form-result', '已保存，LLM 调用 0 次。', 'status-ok');
+    await loadOutcomes();
+  } catch (e) { showResult('outcome-form-result', escapeHtml(e.message), 'status-err'); }
+}
+
+function editOutcome(eventId) {
+  const item = outcomeEvents.find(event => event.event_id === eventId);
+  if (!item) return;
+  document.getElementById('outcome-event-id').value = item.event_id;
+  document.getElementById('outcome-application').value = item.application;
+  document.getElementById('outcome-status').value = item.status;
+  document.getElementById('outcome-date').value = item.date;
+  document.getElementById('outcome-resume').value = item.resume_ref || '';
+  document.getElementById('outcome-note').value = item.note || '';
+  document.getElementById('outcome-form-title').textContent = '编辑投递记录';
+  document.getElementById('outcome-save-button').textContent = '保存修改';
+  showArtifactWarning();
+  document.getElementById('panel-outcomes').scrollIntoView({behavior: 'smooth'});
+}
+
+function resetOutcomeForm() {
+  document.getElementById('outcome-event-id').value = '';
+  document.getElementById('outcome-application').value = '';
+  document.getElementById('outcome-status').value = 'applied';
+  document.getElementById('outcome-date').value = new Date().toISOString().slice(0, 10);
+  document.getElementById('outcome-resume').value = '';
+  document.getElementById('outcome-note').value = '';
+  document.getElementById('outcome-form-title').textContent = '记录投递结果';
+  document.getElementById('outcome-save-button').textContent = '保存记录';
+  document.getElementById('outcome-artifact-warning').textContent = '';
+}
+
+async function deleteOutcomeEvent(eventId) {
+  if (!confirm('确定删除这条投递记录？该操作不会删除简历 PDF。')) return;
+  try {
+    await api(`/outcomes/${encodeURIComponent(eventId)}`, {method: 'DELETE'});
+    if (document.getElementById('outcome-event-id').value === eventId) resetOutcomeForm();
+    await loadOutcomes();
+  } catch (e) { showResult('outcomes-result', escapeHtml(e.message), 'status-err'); }
 }
 
 async function loadTrends() {

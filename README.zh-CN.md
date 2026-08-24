@@ -110,7 +110,7 @@ flowchart TB
 - **事实控制：** 私有结构化事实、明确边界、来源绑定 A/B 措辞、无证据术语阻断，以及默认关键词检索和可选语义召回。
 - **授权控制：** 只有内容未变化时才复用历史决定；事实或 bullet 变化后会自动回到待确认。
 - **选材与交付：** 始终考虑完整已授权素材池，明确报告容量和遗漏原因，并对最终专业 bullet 逐条做溯源检查。
-- **分析与学习：** AEO 检查、只读 LangGraph 事实问答 Agent、投递结果、面试反馈、mastery 历史和跨 JD 缺口趋势。
+- **分析与学习：** AEO 检查、只读 LangGraph 事实问答 Agent、零 LLM Token 的本地投递看板、面试反馈、mastery 历史和跨 JD 缺口趋势。
 
 ## 只读 Agent API
 
@@ -278,6 +278,7 @@ Agent 回归集包含 24 个固定场景，覆盖有证据/无证据问题、ver
 .venv/bin/python -m backend.resume_agent.smoke_test
 .venv/bin/python -m backend.resume_agent.agent.test_agent
 .venv/bin/python -m backend.resume_agent.agent.test_runtime
+.venv/bin/python -m backend.resume_agent.test_outcomes
 .venv/bin/python -m backend.resume_agent.agent_eval
 .venv/bin/python -m backend.resume_agent.eval_matchers
 .venv/bin/python -m backend.resume_agent.rag_eval
@@ -306,7 +307,7 @@ Smoke 同时支持私有运行文件名和公开 `*.example.json` 回退数据�
 docker compose up --build
 ```
 
-打开 <http://127.0.0.1:8000> 查看 JD 分析、申请状态、缺口趋势、mastery 历史和面试反馈；打开 <http://127.0.0.1:8000/docs> 查看 API 契约。Docker 会从构建上下文排除私有运行文件；基础 Compose 不接收 Key，只有可选且被 Git 忽略的 override 会在运行时注入。Named volume 保存 checkpoint 和索引。当前 MVP 的授权、最终生成、AEO 和最终简历登记仍使用 CLI。
+打开 <http://127.0.0.1:8000> 查看 JD 分析、申请状态、本地投递看板、缺口趋势、mastery 历史和面试反馈。投递看板可记录、修改和删除状态事件，并可选关联允许目录中的实际 PDF 及其 SHA256；这些操作不调用 LLM。打开 <http://127.0.0.1:8000/docs> 查看 API 契约。Docker 会从构建上下文排除私有运行文件；基础 Compose 不接收 Key，只有可选且被 Git 忽略的 override 会在运行时注入。Named volume 保存 checkpoint、投递事件和索引。当前 MVP 的授权、最终生成、AEO 和最终简历登记仍使用 CLI。
 
 设计细节见 [`docs/technical_design.md`](docs/technical_design.md)、[`docs/risk_policy.md`](docs/risk_policy.md) 和 [`docs/evaluation_plan.md`](docs/evaluation_plan.md)。
 

@@ -10,6 +10,7 @@ services:
       RESUME_AGENT_LLM_TIMEOUT_SECONDS: ${RESUME_AGENT_LLM_TIMEOUT_SECONDS:-30}
       RESUME_AGENT_LLM_MAX_RETRIES: ${RESUME_AGENT_LLM_MAX_RETRIES:-2}
       RESUME_AGENT_WORKFLOW_TIMEOUT_SECONDS: ${RESUME_AGENT_WORKFLOW_TIMEOUT_SECONDS:-90}
+      RESUME_AGENT_OUTCOME_PATH: /app/data/runtime/application_outcomes.json
     volumes:
       - agent-runtime:/app/data/runtime
       - semantic-index:/app/data/semantic_index

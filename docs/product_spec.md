@@ -89,3 +89,6 @@ Tracks company, job title, JD, generated draft, manual edits, and final decision
   authorization, or delivery write access.
 - Dependency failures produce bounded retries, explicit degradation, or a
   fail-closed response rather than an unverified answer.
+- The local Web UI records, edits, and deletes application outcome events
+  without an LLM call, and may bind an event only to PDFs under the configured
+  output or delivery roots.

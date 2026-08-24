@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+from dataclasses import asdict
 from functools import lru_cache
 import os
 from pathlib import Path
@@ -25,6 +26,18 @@ from ..gaps import build_gap_report, render_gap_report
 from ..gap_trends import load_snapshots
 from ..interview_feedback import load_feedback, record_feedback, render_feedback
 from ..mastery_history import load_mastery_history, render_mastery_history
+from ..outcomes import (
+    VALID_OUTCOMES,
+    default_outcome_path,
+    delete_outcome,
+    list_resume_artifacts,
+    load_outcomes,
+    record_outcome,
+    resolve_resume_ref,
+    resume_ref_for_path,
+    summarize_outcomes,
+    update_outcome,
+)
 from ..status import inspect_application, list_applications, render_status, status_stage
 from ..llm_client import LLMNotConfigured, get_api_key
 
@@ -32,7 +45,7 @@ from ..llm_client import LLMNotConfigured, get_api_key
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 TEMPLATES_DIR = Path(__file__).parent / "templates"
 
-app = FastAPI(title="Truthful Resume Agent", version="0.2.0")
+app = FastAPI(title="Truthful Resume Agent", version="0.3.0-dev")
 
 
 class AnalyzeRequest(BaseModel):
@@ -54,10 +67,22 @@ class InterviewFeedbackRequest(BaseModel):
     date: str | None = None
 
 
+class OutcomeRequest(BaseModel):
+    application: str = Field(min_length=1, max_length=120)
+    status: str = Field(min_length=1, max_length=32)
+    date: str | None = None
+    note: str = Field(default="", max_length=1000)
+    resume_ref: str | None = Field(default=None, max_length=1000)
+
+
 @lru_cache(maxsize=1)
 def get_agent_runtime() -> AgentRuntime:
     configured = os.environ.get("RESUME_AGENT_RUNTIME_DB")
     return AgentRuntime(Path(configured) if configured else DEFAULT_RUNTIME_DB)
+
+
+def get_project_root() -> Path:
+    return PROJECT_ROOT
 
 
 def _uuid(value: str, label: str) -> str:
@@ -181,13 +206,112 @@ def get_agent_trace(trace_id: str, runtime: AgentRuntime = Depends(get_agent_run
 
 
 @app.get("/api/applications")
-def get_applications() -> dict:
+def get_applications(project_root: Path = Depends(get_project_root)) -> dict:
     return {
         "applications": [
             {"name": status.name, "state": status_stage(status)}
-            for status in list_applications(PROJECT_ROOT)
+            for status in list_applications(project_root)
         ]
     }
+
+
+def _outcome_payload(event, project_root: Path) -> dict:
+    payload = asdict(event)
+    payload["resume_ref"] = resume_ref_for_path(project_root, event.resume_path)
+    payload["resume_name"] = Path(event.resume_path).name if event.resume_path else None
+    payload.pop("resume_path", None)
+    return payload
+
+
+@app.get("/api/outcomes")
+def get_outcomes(project_root: Path = Depends(get_project_root)) -> dict:
+    events = load_outcomes(default_outcome_path(project_root))
+    ordered = sorted(events, key=lambda item: (item.date, item.application, item.event_id), reverse=True)
+    return {
+        "events": [_outcome_payload(event, project_root) for event in ordered],
+        "summary": summarize_outcomes(events),
+        "valid_statuses": sorted(VALID_OUTCOMES),
+        "llm_calls": 0,
+    }
+
+
+@app.get("/api/resume-artifacts")
+def get_resume_artifacts(project_root: Path = Depends(get_project_root)) -> dict:
+    artifacts = list_resume_artifacts(project_root)
+    return {
+        "artifacts": [asdict(item) for item in artifacts],
+        "count": len(artifacts),
+        "llm_calls": 0,
+    }
+
+
+@app.post("/api/outcomes", status_code=201)
+def post_outcome(req: OutcomeRequest, project_root: Path = Depends(get_project_root)) -> dict:
+    try:
+        event = record_outcome(
+            project_root=project_root,
+            application=slugify(req.application),
+            status=req.status,
+            event_date=req.date,
+            note=req.note.strip(),
+            resume_path=resolve_resume_ref(project_root, req.resume_ref),
+            use_default_resume=False,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail={"code": "INVALID_OUTCOME", "message": str(exc)}) from exc
+    except OSError as exc:
+        raise HTTPException(
+            status_code=500,
+            detail={"code": "OUTCOME_WRITE_FAILED", "message": "Failed to save outcome."},
+        ) from exc
+    return {"event": _outcome_payload(event, project_root), "llm_calls": 0}
+
+
+@app.put("/api/outcomes/{event_id}")
+def put_outcome(
+    event_id: str,
+    req: OutcomeRequest,
+    project_root: Path = Depends(get_project_root),
+) -> dict:
+    try:
+        event = update_outcome(
+            project_root=project_root,
+            event_id=event_id,
+            application=slugify(req.application),
+            status=req.status,
+            event_date=req.date or "",
+            note=req.note.strip(),
+            resume_path=resolve_resume_ref(project_root, req.resume_ref),
+        )
+    except ValueError as exc:
+        status_code = 404 if str(exc) == "outcome event not found" else 400
+        raise HTTPException(
+            status_code=status_code,
+            detail={"code": "OUTCOME_NOT_FOUND" if status_code == 404 else "INVALID_OUTCOME", "message": str(exc)},
+        ) from exc
+    except OSError as exc:
+        raise HTTPException(
+            status_code=500,
+            detail={"code": "OUTCOME_WRITE_FAILED", "message": "Failed to update outcome."},
+        ) from exc
+    return {"event": _outcome_payload(event, project_root), "llm_calls": 0}
+
+
+@app.delete("/api/outcomes/{event_id}")
+def remove_outcome(event_id: str, project_root: Path = Depends(get_project_root)) -> dict:
+    try:
+        delete_outcome(project_root, event_id)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=404,
+            detail={"code": "OUTCOME_NOT_FOUND", "message": str(exc)},
+        ) from exc
+    except OSError as exc:
+        raise HTTPException(
+            status_code=500,
+            detail={"code": "OUTCOME_WRITE_FAILED", "message": "Failed to delete outcome."},
+        ) from exc
+    return {"deleted": True, "event_id": event_id, "llm_calls": 0}
 
 
 @app.get("/api/status/{name}")

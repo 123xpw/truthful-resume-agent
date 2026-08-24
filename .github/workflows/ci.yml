@@ -26,6 +26,9 @@ jobs:
       - name: Validate public data inside Docker image
         run: docker run --rm truthful-resume-agent:ci python backend/run_cli.py validate
 
+      - name: Test outcome tracker inside Docker image
+        run: docker run --rm truthful-resume-agent:ci python -m backend.resume_agent.test_outcomes
+
       - name: Set up Python
         uses: actions/setup-python@v7
         with:
@@ -48,6 +51,9 @@ jobs:
 
       - name: Run Agent runtime and API tests
         run: python -m backend.resume_agent.agent.test_runtime
+
+      - name: Run local outcome tracker tests
+        run: python -m backend.resume_agent.test_outcomes
 
       - name: Run fixed Agent regression cases
         run: python -m backend.resume_agent.agent_eval

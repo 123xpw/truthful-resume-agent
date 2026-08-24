@@ -130,8 +130,8 @@ There are two supported delivery routes:
   capacity and omission reasons remain explicit, and every delivered
   professional bullet must pass provenance checks.
 - **Analysis and learning:** AEO review, a read-only LangGraph fact Q&A Agent,
-  application outcomes, interview feedback, mastery history, and cross-JD gap
-  trends.
+  a local zero-LLM application outcome dashboard, interview feedback, mastery
+  history, and cross-JD gap trends.
 
 ## Read-only Agent API
 
@@ -333,6 +333,7 @@ Run `.venv/bin/python backend/run_cli.py --help` for every option.
 .venv/bin/python -m backend.resume_agent.smoke_test
 .venv/bin/python -m backend.resume_agent.agent.test_agent
 .venv/bin/python -m backend.resume_agent.agent.test_runtime
+.venv/bin/python -m backend.resume_agent.test_outcomes
 .venv/bin/python -m backend.resume_agent.agent_eval
 .venv/bin/python -m backend.resume_agent.eval_matchers
 .venv/bin/python -m backend.resume_agent.rag_eval
@@ -377,11 +378,14 @@ commits.
 docker compose up --build
 ```
 
-Open <http://127.0.0.1:8000> for JD analysis, application status, gap trends,
-mastery history, and interview feedback. Open <http://127.0.0.1:8000/docs> for
-the API contract. Docker excludes private runtime files from the image context;
+Open <http://127.0.0.1:8000> for JD analysis, application status, the local
+outcome tracker, gap trends, mastery history, and interview feedback. The
+outcome tracker records, edits, and deletes local status events, optionally
+linking an allowed output/delivery PDF by SHA256; these operations make zero
+LLM calls. Open <http://127.0.0.1:8000/docs> for the API contract. Docker
+excludes private runtime files from the image context;
 the base Compose service receives no key, while the optional ignored override
-injects one at runtime. Named volumes persist checkpoints and indexes.
+injects one at runtime. Named volumes persist checkpoints, outcome events, and indexes.
 Authorization, finalization, AEO, and canonical registration remain CLI
 operations in the current MVP.
 

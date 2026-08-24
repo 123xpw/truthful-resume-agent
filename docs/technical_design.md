@@ -397,13 +397,21 @@ The LLM path is used only for general questions; it never updates facts, fragmen
 FastAPI-based web UI (`backend/resume_agent/web/`):
 
 - `app.py` — REST endpoints for JD analysis, application status, gap trends,
-  mastery history, interview feedback, Agent conversations/messages/traces,
-  health/readiness, and static SPA serving.
-- `templates/index.html` — 5-tab vanilla-JS diagnostics SPA (no build step): JD 分析 / 申请列表 / 缺口趋势 / Mastery 时间线 / 面试反馈.
+  mastery history, interview feedback, local outcome CRUD/PDF selection,
+  Agent conversations/messages/traces, health/readiness, and static SPA serving.
+- `templates/index.html` — 6-tab vanilla-JS local SPA (no build step): JD 分析 / 申请列表 / 投递看板 / 缺口趋势 / Mastery 时间线 / 面试反馈.
 - Start with `.venv/bin/uvicorn backend.resume_agent.web.app:app --reload`.
 - Or run the public-example image with `docker compose up --build`.
 
 The Web layer reuses core modules but does **not** mirror the CLI 1:1. Candidate authorization, finalization, AEO review, canonical registration, and delivery remain CLI-only in the current MVP.
+
+Outcome endpoints are deterministic and make no LLM calls. PDF references use
+opaque `output:` or `delivery:` roots and resolve paths before hashing; traversal
+outside those roots and non-PDF targets are rejected. The private outcome JSON
+remains gitignored. Existing pre-ID records receive stable legacy IDs on read
+and are upgraded only when the user edits or deletes an event. Native runs keep
+the legacy local path; Compose sets `RESUME_AGENT_OUTCOME_PATH` inside the
+existing runtime volume so events survive container replacement.
 
 ## Memory Evolution: Three-Layer Feedback Loop
 

@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- Local zero-LLM application outcome dashboard with PDF-hash linking,
+  editable timelines, and deterministic funnel summaries.
+- Backward-compatible outcome event IDs plus bounded update/delete APIs.
+
 ## [0.2.0] - 2026-08-24
 
 ### Added
