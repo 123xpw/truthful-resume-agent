@@ -4,6 +4,8 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-08-24
+
 ### Added
 
 - Read-only FastAPI Agent endpoints with UUID conversation IDs.
