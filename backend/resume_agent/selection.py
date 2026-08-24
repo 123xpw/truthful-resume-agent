@@ -22,6 +22,7 @@ class SelectionPlan:
     signals: tuple[tuple[str, str], ...]
     source: str
     note: str
+    excluded_items: tuple[tuple[str, str, str], ...] = ()
 
 
 def _match_map(result: AnalysisResult) -> dict[str, FactMatch]:
@@ -106,6 +107,7 @@ def deterministic_selection(
     fragments: dict[str, ResumeFragment],
     facts: dict[str, Fact],
     result: AnalysisResult,
+    excluded_items: tuple[tuple[str, str, str], ...] = (),
 ) -> SelectionPlan:
     matches = _match_map(result)
     selected: list[str] = []
@@ -145,6 +147,7 @@ def deterministic_selection(
         signals=signals,
         source="deterministic_fallback",
         note="Selected by visible match strength, wording readiness, risk, and stable order; no LLM ranking was used.",
+        excluded_items=excluded_items,
     )
 
 
@@ -168,6 +171,7 @@ def llm_selection(
     fragments: dict[str, ResumeFragment],
     facts: dict[str, Fact],
     result: AnalysisResult,
+    excluded_items: tuple[tuple[str, str, str], ...] = (),
 ) -> SelectionPlan:
     matches = _match_map(result)
     candidates = [
@@ -225,6 +229,7 @@ def llm_selection(
         signals=signals,
         source="llm_restricted_ids",
         note="The LLM ranked only existing confirmed fragment IDs; code validated identity, section, and capacity.",
+        excluded_items=excluded_items,
     )
 
 
@@ -236,15 +241,31 @@ def build_selection_plan(
     facts: dict[str, Fact],
     result: AnalysisResult,
     use_llm: bool = False,
+    excluded_items: tuple[tuple[str, str, str], ...] = (),
 ) -> SelectionPlan:
     if use_llm:
         try:
-            return llm_selection(jd_text, ordered_ids, selected_levels, fragments, facts, result)
+            return llm_selection(
+                jd_text,
+                ordered_ids,
+                selected_levels,
+                fragments,
+                facts,
+                result,
+                excluded_items=excluded_items,
+            )
         except LLMNotConfigured as exc:
             raise ValueError(f"LLM selection requested but not configured: {exc}") from exc
         except Exception as exc:
             raise ValueError(f"LLM selection failed closed: {type(exc).__name__}: {exc}") from exc
-    return deterministic_selection(ordered_ids, selected_levels, fragments, facts, result)
+    return deterministic_selection(
+        ordered_ids,
+        selected_levels,
+        fragments,
+        facts,
+        result,
+        excluded_items=excluded_items,
+    )
 
 
 def render_selection_report(plan: SelectionPlan, fragments: dict[str, ResumeFragment]) -> str:
@@ -263,12 +284,20 @@ def render_selection_report(plan: SelectionPlan, fragments: dict[str, ResumeFrag
         f"{signals[fragment_id]}"
         for fragment_id in plan.selected_ids
     )
-    lines.extend(["", "## Omitted For This Resume"])
+    lines.extend(["", "## Omitted After JD/Page Ranking"])
     if plan.omitted_ids:
         lines.extend(
             f"- `{fragment_id}` — {fragments[fragment_id].title}: omitted after JD-fit and "
             f"page-capacity ranking; {signals[fragment_id]}"
             for fragment_id in plan.omitted_ids
+        )
+    else:
+        lines.append("- None")
+    lines.extend(["", "## Excluded Before Ranking"])
+    if plan.excluded_items:
+        lines.extend(
+            f"- `{item_id}` — {title}: {reason}"
+            for item_id, title, reason in plan.excluded_items
         )
     else:
         lines.append("- None")

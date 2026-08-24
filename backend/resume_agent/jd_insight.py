@@ -115,7 +115,7 @@ def _prep_note(tech: str, tier: str) -> str:
         return f"『{tech}』只出现在加分项里——是锦上添花，不补不影响硬性门槛，视你自己的时间精力决定要不要投入。"
     if tier == "both":
         return f"『{tech}』既在硬性要求也在加分项里出现——按硬性要求处理，优先级最高，需要真实项目。"
-    return f"『{tech}』在 JD 里出现，但没能从标题结构判断它属于硬性要求还是加分项，建议自己对照 JD 原文（见第 0 节）判断优先级。"
+    return f"『{tech}』在 JD 里出现，但没能从标题结构判断它属于硬性要求还是加分项，建议自己对照 JD 原文判断优先级。"
 
 
 def _llm_call_safe(messages: list[dict]) -> tuple[str | None, str | None]:
@@ -700,33 +700,47 @@ def render_html(data: JDInsightData) -> str:
     if data.llm_enabled and not data.phrasing_accepted and not data.phrasing_rejected:
         phrasing_html += "<p>没有已匹配的事实可供实验性改写。</p>"
 
-    body = "".join(
-        [
-            section("0", "JD 原文", "rule", f'<pre class="jdtext">{_esc(data.jd_text.strip())}</pre>'),
-            section(
-                "1",
-                "这个岗位到底在招什么人",
-                "llm",
-                llm_body(data.role_summary, data.role_summary_error, "本次使用 --no-llm，仅展示确定性分析。"),
-            ),
-            section(
-                "2",
-                "核心能力地图",
-                "llm",
-                llm_body(data.capability_map, data.capability_map_error, "本次使用 --no-llm，未生成能力地图。"),
-            ),
-            section("3", "硬要求 / 隐性要求 / 加分项", "rule", req_html),
-            section("4", "和事实库的匹配点", "rule", matches_html),
-            section("5", "不可写项", "rule", not_writable_html),
-            section(
-                "6",
-                "可能面试追问",
-                "llm",
-                llm_body(data.interview_followups, data.interview_followups_error, "本次使用 --no-llm，未生成面试追问。"),
-            ),
-            section("7", "你可以补准备的方向", "rule", prep_html),
-            section("8", "实验性表达候选（仅供审阅，不进入简历）", "llm", phrasing_html),
-        ]
+    body_sections = [
+        section("1", "和事实库的匹配点", "rule", matches_html),
+        section("2", "不可写项", "rule", not_writable_html),
+        section("3", "硬要求 / 隐性要求 / 加分项", "rule", req_html),
+        section("4", "你可以补准备的方向", "rule", prep_html),
+    ]
+    if data.llm_enabled:
+        body_sections.extend(
+            [
+                section(
+                    "5",
+                    "这个岗位到底在招什么人",
+                    "llm",
+                    llm_body(data.role_summary, data.role_summary_error, ""),
+                ),
+                section(
+                    "6",
+                    "核心能力地图",
+                    "llm",
+                    llm_body(data.capability_map, data.capability_map_error, ""),
+                ),
+                section(
+                    "7",
+                    "可能面试追问",
+                    "llm",
+                    llm_body(data.interview_followups, data.interview_followups_error, ""),
+                ),
+                section("8", "实验性表达候选（仅供审阅，不进入简历）", "llm", phrasing_html),
+            ]
+        )
+    body_sections.append(
+        '<details class="card raw-jd"><summary>JD 原文（点击展开） '
+        + badge("rule")
+        + f'</summary><pre class="jdtext">{_esc(data.jd_text.strip())}</pre></details>'
+    )
+    body = "".join(body_sections)
+    disclaimer = (
+        '灰色徽章表示代码直接计算的确定性内容；橙色徽章表示只供人工审阅的 LLM 输出。'
+        'LLM 建议不能进入简历生成器。'
+        if data.llm_enabled
+        else '本报告使用 <code>--no-llm</code>：只展示可逐字核对的 JD 结构、事实匹配和不可写边界。'
     )
 
     return f"""<!doctype html>
@@ -755,6 +769,8 @@ def render_html(data: JDInsightData) -> str:
   .card {{ background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; padding: 1.2rem 1.4rem; margin-bottom: 1rem; }}
   .card h2 {{ font-size: 1.05rem; margin: 0 0 0.7rem; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }}
   .card h3 {{ font-size: 0.95rem; margin: 0.9rem 0 0.4rem; }}
+  details.card summary {{ cursor: pointer; font-weight: 650; }}
+  details.card[open] summary {{ margin-bottom: 0.8rem; }}
   .badge {{ font-size: 0.7rem; font-weight: 600; padding: 0.15rem 0.55rem; border-radius: 999px; }}
   .badge-rule {{ background: var(--rule); color: var(--rule-text); }}
   .badge-llm {{ background: var(--llm); color: var(--llm-text); }}
@@ -779,7 +795,7 @@ def render_html(data: JDInsightData) -> str:
 <div class="wrap">
   <h1>JD Insight Report</h1>
   <div class="meta">JD source: <code>{_esc(str(data.jd_path))}</code> &nbsp;·&nbsp; Inferred job type: <strong>{_esc(data.job_type)}</strong></div>
-  <div class="disclaimer">灰色徽章"规则 / 确定性"的内容由代码直接计算，可逐字核对；橙色徽章"LLM 生成"的内容需要你自己判断准确性。第 8 节额外做了 fact_id 与边界风险筛查，但这仍不能证明候选句完全由事实推出，且简历生成器不会读取它。见 <code>docs/project_reset.md</code>。</div>
+  <div class="disclaimer">{disclaimer}</div>
   {body}
 </div>
 </body>

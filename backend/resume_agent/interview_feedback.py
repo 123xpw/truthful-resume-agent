@@ -9,8 +9,10 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from datetime import date
 import json
-import os
 from pathlib import Path
+
+from .fact_store import load_facts
+from .io_utils import atomic_write_text
 
 
 @dataclass(frozen=True)
@@ -59,6 +61,11 @@ def record_feedback(
     note: str = "",
     event_date: str | None = None,
 ) -> InterviewFeedback:
+    known_fact_ids = {
+        fact.id for fact in load_facts(project_root / "data" / "facts" / "facts.json")
+    }
+    if fact_id not in known_fact_ids:
+        raise ValueError(f"unknown fact_id: {fact_id}")
     effective_date = event_date or date.today().isoformat()
     try:
         date.fromisoformat(effective_date)
@@ -75,10 +82,9 @@ def record_feedback(
     path = feedback_path(project_root, application)
     items = load_feedback(project_root, application)
     items.append(feedback)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
+    atomic_write_text(
+        path,
         json.dumps([asdict(item) for item in items], ensure_ascii=False, indent=2),
-        encoding="utf-8",
     )
     return feedback
 
@@ -113,14 +119,9 @@ def append_boundary_to_facts(facts_path: Path, fact_id: str, boundary_text: str)
             return "duplicate"
         boundaries.append(boundary_text)
         item["boundaries"] = boundaries
-        temp_path = facts_path.with_name(f"{facts_path.name}.tmp")
-        try:
-            temp_path.write_text(
-                json.dumps(raw_items, ensure_ascii=False, indent=2),
-                encoding="utf-8",
-            )
-            os.replace(temp_path, facts_path)
-        finally:
-            temp_path.unlink(missing_ok=True)
+        atomic_write_text(
+            facts_path,
+            json.dumps(raw_items, ensure_ascii=False, indent=2),
+        )
         return "written"
     return "fact_not_found"

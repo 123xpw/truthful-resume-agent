@@ -4,6 +4,7 @@ from pathlib import Path
 import re
 
 from .analyzer import MatcherName, analyze_jd
+from .authorization_store import load_valid_authorizations
 from .fact_store import load_facts
 from .fragments import ResumeFragment, load_fragments
 from .profile import ResumeProfile, SkillProfile, load_profile
@@ -173,6 +174,64 @@ def _fragment_level(fragment: ResumeFragment, mastery: dict[str, str]) -> str | 
     return "A" if all(level == "A" for level in levels) else "B"
 
 
+def _eligible_fragment_levels(
+    fragments: dict[str, ResumeFragment],
+    review_mastery: dict[str, str],
+    global_authorizations: dict[str, dict],
+) -> tuple[dict[str, str], list[tuple[str, str, str]]]:
+    """Build the complete authorized inventory; matcher results do not gate it."""
+    levels: dict[str, str] = {}
+    excluded: list[tuple[str, str, str]] = []
+    for fragment_id, fragment in fragments.items():
+        current_level = _fragment_level(fragment, review_mastery)
+        if current_level in {"A", "B"}:
+            levels[fragment_id] = current_level
+            continue
+        current_source_levels = [review_mastery.get(fact_id) for fact_id in fragment.source_fact_ids]
+        if any(level in {"C", "D"} for level in current_source_levels):
+            excluded.append((fragment_id, fragment.title, "current review explicitly blocks one or more source facts (C/D)"))
+            continue
+        authorization = global_authorizations.get(fragment_id, {})
+        authorized_level = authorization.get("level")
+        if authorized_level in {"A", "B"}:
+            levels[fragment_id] = str(authorized_level)
+            continue
+        if authorized_level in {"C", "D"}:
+            reason = f"global wording authorization is {authorized_level}"
+        elif fragment_id in global_authorizations:
+            reason = "global authorization is invalid"
+        else:
+            reason = "no current content-hash-valid A/B authorization"
+        excluded.append((fragment_id, fragment.title, reason))
+    return levels, excluded
+
+
+def _suppressed_internship_exclusions(
+    authorized_ids: set[str],
+    visible_ids: list[str],
+    fragments: dict[str, ResumeFragment],
+) -> list[tuple[str, str, str]]:
+    visible = set(visible_ids)
+    exclusions: list[tuple[str, str, str]] = []
+    for fragment_id in sorted(authorized_ids - visible):
+        representative = next(
+            (
+                candidate
+                for candidate in visible_ids
+                if fragment_id in COMPOSITE_INTERNSHIP_SOURCES.get(candidate, set())
+                or any(fragment_id in group and candidate in group for group in INTERNSHIP_EXCLUSIVE_GROUPS)
+            ),
+            None,
+        )
+        reason = (
+            f"same internship stint is represented by {representative}"
+            if representative
+            else "suppressed by internship representation rules"
+        )
+        exclusions.append((fragment_id, fragments[fragment_id].title, reason))
+    return exclusions
+
+
 def _select_profile_skills(
     profile: ResumeProfile,
     mastery: dict[str, str],
@@ -278,11 +337,12 @@ def generate_resume_tex(
     fragments = load_fragments(project_root / "data" / "resume_fragments" / "fragments.json")
     profile = load_profile(project_root)
 
-    selected_levels: dict[str, str] = {
-        fact_id: level
-        for fact_id, fragment in fragments.items()
-        if (level := _fragment_level(fragment, mastery)) in {"A", "B"}
-    }
+    valid_authorizations = load_valid_authorizations(project_root)
+    selected_levels, excluded_items = _eligible_fragment_levels(
+        fragments,
+        mastery,
+        valid_authorizations,
+    )
 
     if not selected_levels:
         raise ValueError("No A/B facts selected. Update review_sheet.md before generating resume.")
@@ -291,12 +351,24 @@ def generate_resume_tex(
         fact_id for fact_id in selected_levels if fragments[fact_id].section == "实习经历"
     }
     eligible_internships = _choose_internship_order(internship_ids, fragments)
+    excluded_items.extend(
+        _suppressed_internship_exclusions(internship_ids, eligible_internships, fragments)
+    )
     project_ids = {
         fact_id for fact_id in selected_levels if fragments[fact_id].section == "项目经历"
     }
     eligible_projects = _choose_project_order(result.job_type, project_ids, fragments)
     eligible_order = [*eligible_internships, *eligible_projects]
     facts = {fact.id: fact for fact in load_facts(project_root / "data" / "facts" / "facts.json")}
+    represented_fact_ids = {
+        source_fact_id
+        for fragment in fragments.values()
+        for source_fact_id in fragment.source_fact_ids
+    }
+    for fact_id in sorted(set(facts) - represented_fact_ids):
+        excluded_items.append(
+            (fact_id, facts[fact_id].title, "fact exists but has no source-linked resume fragment")
+        )
     selection = build_selection_plan(
         jd_text=jd_text,
         ordered_ids=eligible_order,
@@ -305,10 +377,15 @@ def generate_resume_tex(
         facts=facts,
         result=result,
         use_llm=use_llm_selection,
+        excluded_items=tuple(sorted(set(excluded_items))),
     )
     selected_fragment_ids = set(selection.selected_ids)
     selection_report_path = write_selection_report(selection, fragments, output_dir)
-    included_skills, omitted_skills = _select_profile_skills(profile, mastery, set(facts))
+    effective_mastery = dict(mastery)
+    for fragment_id, level in selected_levels.items():
+        for fact_id in fragments[fragment_id].source_fact_ids:
+            effective_mastery.setdefault(fact_id, level)
+    included_skills, omitted_skills = _select_profile_skills(profile, effective_mastery, set(facts))
     _append_skill_selection_report(selection_report_path, included_skills, omitted_skills)
 
     lines: list[str] = [FORMAT_PREFIX]

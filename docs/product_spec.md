@@ -26,10 +26,10 @@ not a substitute for competitive resume quality.
 4. System retrieves relevant fact-bank entries.
 5. System builds a match matrix.
 6. System identifies unsupported requirements.
-7. System generates resume bullet drafts with evidence links.
-8. User confirms factual wording, explainability boundaries, or interview-risk vetoes.
+7. System loads source-linked A/B fragments; optional LLM wording remains advisory and outside the generator.
+8. User authorizes the exact factual wording or vetoes its interview risk.
 9. System ranks only eligible source-linked fragments against the JD and page capacity, then reports included and omitted items.
-10. System stores the final version, selection plan, and decision history.
+10. System audits the actual TeX/PDF, stores bullet provenance and hashes, and records observed outcomes separately.
 
 ## Core Pages
 
@@ -60,7 +60,7 @@ Table columns:
 
 ### Resume Draft
 
-Generates bullet drafts only from supported facts. Every bullet must keep a source reference and risk label.
+Builds the draft only from authorized source-linked fragments. Hand-edited final bullets require a separate candidate-confirmed provenance mapping before canonical registration.
 
 ### Interview Risk
 
@@ -82,3 +82,5 @@ Tracks company, job title, JD, generated draft, manual edits, and final decision
   useful facts and irrelevant selections.
 - Application outcomes are linked to the exact resume hash without claiming
   unsupported causality.
+- A clean public clone passes validation and smoke tests using only desensitized
+  `*.example.json` data.

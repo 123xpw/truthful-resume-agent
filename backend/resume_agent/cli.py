@@ -1,17 +1,20 @@
 from __future__ import annotations
 
 import argparse
+import json
 from pathlib import Path
 import shutil
 import subprocess
 import sys
 
 from .analyzer import analyze_jd, save_jd_memory, slugify
+from .aeo_review import build_aeo_review, render_aeo_markdown, write_aeo_review
 from .authorization_store import apply_reusable_authorizations, record_authorizations_from_review
+from .canonical import audit_canonical_resume, register_canonical, write_canonical_audit
 from .decision_flow import run_interactive_decision
 from .delivery import DeliveryQualityError, deliver_resume
 from .gaps import build_gap_report, expand_review_from_gaps, render_gap_report, write_gap_report
-from .gap_trends import diff_against_last, load_snapshots, record_gap_snapshot
+from .gap_trends import diff_against_last, load_snapshots, record_gap_snapshot, render_career_trends_html
 from .fact_store import load_facts, resolve_facts_path
 from .interview_feedback import (
     append_boundary_to_facts,
@@ -22,6 +25,7 @@ from .interview_feedback import (
 from .jd_insight import build_jd_insight_data, render_gap_warning, render_gap_warning_html, render_markdown, write_jd_insight
 from .mastery_history import (
     load_mastery_history,
+    record_mastery_snapshot,
     render_mastery_history,
 )
 from .outcomes import VALID_OUTCOMES, default_outcome_path, load_outcomes, record_outcome, render_outcomes
@@ -138,6 +142,22 @@ def build_parser() -> argparse.ArgumentParser:
         help="Project root path",
     )
 
+    authorize = subparsers.add_parser(
+        "authorize",
+        help="Authorize only new or content-changed resume wording (preferred alias for decide)",
+    )
+    authorize_input = authorize.add_mutually_exclusive_group(required=True)
+    authorize_input.add_argument("--review", type=Path, help="Path to review_sheet.md")
+    authorize_input.add_argument("--name", help="Name of a saved JD output folder")
+    authorize.add_argument("--notes", action="store_true", help="Collect optional authorization/boundary notes")
+    authorize.add_argument("--revisit", action="store_true", help="Revisit all existing decisions")
+    authorize.add_argument(
+        "--project-root",
+        type=Path,
+        default=Path(__file__).resolve().parents[2],
+        help="Project root path",
+    )
+
     prepare = subparsers.add_parser("prepare", help="Save JD, write match report, and create review sheet")
     prepare_input = prepare.add_mutually_exclusive_group(required=True)
     prepare_input.add_argument("--file", type=Path, help="Path to a JD markdown/text file")
@@ -233,6 +253,11 @@ def build_parser() -> argparse.ArgumentParser:
     record_outcome_cmd.add_argument("--date", help="Event date in YYYY-MM-DD; defaults to today")
     record_outcome_cmd.add_argument("--note", default="", help="Short factual note; do not infer causality")
     record_outcome_cmd.add_argument(
+        "--pdf",
+        type=Path,
+        help="Actual delivered PDF to hash. Defaults to data/outputs/<name>/resume_draft.pdf.",
+    )
+    record_outcome_cmd.add_argument(
         "--project-root",
         type=Path,
         default=Path(__file__).resolve().parents[2],
@@ -272,6 +297,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     career_trends = subparsers.add_parser("career-trends", help="Aggregate 缺什么 across all saved JDs (frequency of unsupported tech)")
     career_trends.add_argument("--write", action="store_true", help="Write data/evaluation/career_trends.md")
+    career_trends.add_argument("--html", action="store_true", help="Write data/evaluation/career_trends.html")
     career_trends.add_argument(
         "--project-root",
         type=Path,
@@ -327,6 +353,42 @@ def build_parser() -> argparse.ArgumentParser:
     )
     mastery_history_cmd.add_argument("--fact-id", help="Show timeline for a single fact ID")
     mastery_history_cmd.add_argument(
+        "--project-root",
+        type=Path,
+        default=Path(__file__).resolve().parents[2],
+        help="Project root path",
+    )
+
+    canonical = subparsers.add_parser(
+        "register-canonical",
+        help="Audit and register the actual hand-edited TeX/PDF used for delivery",
+    )
+    canonical.add_argument("--name", required=True, help="Saved application name")
+    canonical.add_argument("--tex", type=Path, required=True, help="Actual canonical TeX path")
+    canonical.add_argument("--pdf", type=Path, required=True, help="Actual canonical PDF path")
+    canonical.add_argument(
+        "--provenance",
+        type=Path,
+        help="Candidate-confirmed provenance JSON for manually rewritten bullets",
+    )
+    canonical.add_argument(
+        "--project-root",
+        type=Path,
+        default=Path(__file__).resolve().parents[2],
+        help="Project root path",
+    )
+
+    aeo = subparsers.add_parser(
+        "aeo-review",
+        help="Simulate first-pass AI screening over the actual resume and target JD",
+    )
+    aeo_input = aeo.add_mutually_exclusive_group(required=True)
+    aeo_input.add_argument("--jd-file", type=Path, help="Target JD file")
+    aeo_input.add_argument("--name", help="Saved JD name in data/jd_library")
+    aeo.add_argument("--resume", type=Path, required=True, help="Actual TeX resume to screen")
+    aeo.add_argument("--no-llm", action="store_true", help="Only run deterministic AEO coverage checks")
+    aeo.add_argument("--write", action="store_true", help="Write aeo_review.md and aeo_review.html")
+    aeo.add_argument(
         "--project-root",
         type=Path,
         default=Path(__file__).resolve().parents[2],
@@ -586,7 +648,7 @@ def run_generate(args: argparse.Namespace) -> int:
 
 def run_decide(args: argparse.Namespace) -> int:
     project_root: Path = args.project_root
-    output_slug = slugify(args.name)
+    output_slug = slugify(args.name) if args.name else args.review.parent.name
     review_path = args.review or project_root / "data" / "outputs" / output_slug / "review_sheet.md"
     jd_path = project_root / "data" / "jd_library" / f"{output_slug}.md"
     if not review_path.exists():
@@ -614,6 +676,9 @@ def run_decide(args: argparse.Namespace) -> int:
                 f"Reusable resume authorizations saved: {authorization_count} item(s) "
                 "-> data/resume_authorizations.json"
             )
+        snapshot = record_mastery_snapshot(project_root, output_slug, review_path)
+        if snapshot is not None:
+            print(f"Mastery snapshot recorded: {snapshot.date} [{snapshot.application}]")
     return code
 
 
@@ -655,7 +720,7 @@ def run_prepare(args: argparse.Namespace) -> int:
         print(f"Reused {reused_count} unchanged resume authorization(s).")
     if pending_count:
         print(
-            f"Next: python3 backend/run_cli.py decide --name {output_slug} "
+            f"Next: python3 backend/run_cli.py authorize --name {output_slug} "
             f"({pending_count} new or changed item(s) only)"
         )
         print(f"Then: python3 backend/run_cli.py finalize --name {output_slug} --llm-select --pdf")
@@ -689,7 +754,7 @@ def run_finalize(args: argparse.Namespace) -> int:
     pending_count = count_pending_review_items(review_path)
     if pending_count:
         print(f"Finalize failed: review sheet still has {pending_count} pending item(s).", file=sys.stderr)
-        print(f"Run `python3 backend/run_cli.py decide --name {output_slug}` first.", file=sys.stderr)
+        print(f"Run `python3 backend/run_cli.py authorize --name {output_slug}` first.", file=sys.stderr)
         return 2
     unverified_count = count_unverified_ab_items(review_path)
     if unverified_count:
@@ -744,6 +809,7 @@ def run_record_outcome(args: argparse.Namespace) -> int:
             status=args.status,
             event_date=args.date,
             note=args.note,
+            resume_path=args.pdf,
         )
     except ValueError as exc:
         print(f"Record outcome failed: {exc}", file=sys.stderr)
@@ -923,6 +989,14 @@ def run_career_trends(args: argparse.Namespace) -> int:
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text(report, encoding="utf-8")
         print(f"\nWritten: {out}")
+    if args.html:
+        html_out = project_root / "data" / "evaluation" / "career_trends.html"
+        html_out.parent.mkdir(parents=True, exist_ok=True)
+        html_out.write_text(
+            render_career_trends_html(total, tech_jds, diff),
+            encoding="utf-8",
+        )
+        print(f"HTML written: {html_out}")
     return 0
 
 
@@ -950,7 +1024,7 @@ def run_expand_review(args: argparse.Namespace) -> int:
         print("Added fact_ids:", ", ".join(result.added_fact_ids))
     if result.skipped_existing:
         print(f"Skipped existing fact_ids: {result.skipped_existing}")
-    print(f"Next: python3 backend/run_cli.py decide --name {name}")
+    print(f"Next: python3 backend/run_cli.py authorize --name {name}")
     return 0
 
 
@@ -1001,6 +1075,54 @@ def run_mastery_history(args: argparse.Namespace) -> int:
     return 0
 
 
+def run_register_canonical(args: argparse.Namespace) -> int:
+    name = slugify(args.name)
+    output_dir = args.project_root / "data" / "outputs" / name
+    try:
+        audit = audit_canonical_resume(
+            project_root=args.project_root,
+            application=name,
+            tex_path=args.tex,
+            pdf_path=args.pdf,
+            provenance_path=args.provenance,
+        )
+    except (json.JSONDecodeError, ValueError) as exc:
+        print(f"Canonical audit failed: {exc}", file=sys.stderr)
+        return 2
+    report_path, audit_path, todo_path = write_canonical_audit(audit, output_dir)
+    print(f"Canonical audit written: {report_path}")
+    print(f"Canonical audit data: {audit_path}")
+    if not audit.ready:
+        print(f"Canonical registration blocked: {len(audit.reasons)} issue(s).", file=sys.stderr)
+        if todo_path:
+            print(f"Complete provenance mapping: {todo_path}", file=sys.stderr)
+        return 2
+    manifest_path = register_canonical(audit, output_dir)
+    print(f"Canonical delivery registered: {manifest_path}")
+    return 0
+
+
+def run_aeo_review(args: argparse.Namespace) -> int:
+    jd_path = args.jd_file or args.project_root / "data" / "jd_library" / f"{slugify(args.name)}.md"
+    if not jd_path.exists():
+        print(f"AEO review failed: JD not found: {jd_path}", file=sys.stderr)
+        return 2
+    if not args.resume.exists():
+        print(f"AEO review failed: resume not found: {args.resume}", file=sys.stderr)
+        return 2
+    review = build_aeo_review(jd_path, args.resume, use_llm=not args.no_llm)
+    print(render_aeo_markdown(review))
+    if args.write:
+        output_name = slugify(args.name or jd_path.stem)
+        md_path, html_path = write_aeo_review(
+            review,
+            args.project_root / "data" / "outputs" / output_name,
+        )
+        print(f"AEO review written: {md_path}")
+        print(f"AEO review HTML written: {html_path}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -1012,7 +1134,7 @@ def main(argv: list[str] | None = None) -> int:
         return run_validate(args)
     if args.command == "generate":
         return run_generate(args)
-    if args.command == "decide":
+    if args.command in {"decide", "authorize"}:
         return run_decide(args)
     if args.command == "prepare":
         return run_prepare(args)
@@ -1044,6 +1166,10 @@ def main(argv: list[str] | None = None) -> int:
         return run_list_interview(args)
     if args.command == "mastery-history":
         return run_mastery_history(args)
+    if args.command == "register-canonical":
+        return run_register_canonical(args)
+    if args.command == "aeo-review":
+        return run_aeo_review(args)
     parser.error(f"Unknown command: {args.command}")
     return 2
 

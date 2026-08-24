@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from ..io_utils import atomic_write_text
+
 MEMORY_PATH = Path(__file__).resolve().parents[3] / "data" / "agent_memory.json"
 
 
@@ -18,7 +20,7 @@ def _load() -> dict:
 
 
 def _save(data: dict) -> None:
-    MEMORY_PATH.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    atomic_write_text(MEMORY_PATH, json.dumps(data, ensure_ascii=False, indent=2))
 
 
 def save_preference(key: str, value: str) -> None:

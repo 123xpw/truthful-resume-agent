@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import dataclass
+import hashlib
 import json
 from pathlib import Path
 from typing import Any
 
 from .analyzer import AnalysisResult, FactMatch, analyze_jd
+from .fact_store import load_facts, resolve_facts_path
 
 
 @dataclass(frozen=True)
@@ -50,6 +52,44 @@ def load_audit_labels(path: Path) -> tuple[str, dict[str, dict[str, dict[str, st
     if not isinstance(cases, dict):
         raise ValueError("matcher label file must contain an object named 'cases'")
     return reviewer, cases
+
+
+def _sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def validate_label_coverage(
+    jd_paths: list[Path],
+    fact_ids: set[str],
+    label_cases: dict[str, dict[str, dict[str, str]]],
+) -> list[str]:
+    """Require a complete, current rating matrix before publishing metrics."""
+    errors: list[str] = []
+    jd_names = {path.name for path in jd_paths}
+    missing_cases = sorted(jd_names - set(label_cases))
+    unknown_cases = sorted(set(label_cases) - jd_names)
+    if missing_cases:
+        errors.append("missing JD label cases: " + ", ".join(missing_cases))
+    if unknown_cases:
+        errors.append("labels contain JDs outside this evaluation: " + ", ".join(unknown_cases))
+    for jd_name in sorted(jd_names.intersection(label_cases)):
+        ratings = label_cases[jd_name]
+        missing_facts = sorted(fact_ids - set(ratings))
+        unknown_facts = sorted(set(ratings) - fact_ids)
+        invalid = sorted(
+            fact_id
+            for fact_id, item in ratings.items()
+            if not isinstance(item, dict)
+            or item.get("label") not in {"useful", "marginal", "irrelevant"}
+            or not str(item.get("rationale", "")).strip()
+        )
+        if missing_facts:
+            errors.append(f"{jd_name}: missing fact labels: {', '.join(missing_facts)}")
+        if unknown_facts:
+            errors.append(f"{jd_name}: unknown fact labels: {', '.join(unknown_facts)}")
+        if invalid:
+            errors.append(f"{jd_name}: invalid labels/rationales: {', '.join(invalid)}")
+    return errors
 
 
 def score_matches(matches: list[FactMatch], ratings: dict[str, dict[str, str]]) -> MatcherMetrics:
@@ -124,6 +164,7 @@ def render_markdown(
     evals: list[MatcherEval],
     label_cases: dict[str, dict[str, dict[str, str]]] | None = None,
     reviewer: str | None = None,
+    source_hashes: dict[str, str] | None = None,
 ) -> str:
     lines: list[str] = []
     lines.append("# Matcher Evaluation")
@@ -134,6 +175,12 @@ def render_markdown(
         lines.append(
             f"Relevance labels come from `{reviewer or 'unknown'}` and are an auditable baseline, not candidate ground truth."
         )
+    if source_hashes:
+        lines.append("")
+        lines.append("## Evaluation Inputs")
+        lines.append("")
+        for name, digest in source_hashes.items():
+            lines.append(f"- `{name}` sha256: `{digest}`")
     lines.append("")
 
     if label_cases is not None:
@@ -165,6 +212,37 @@ def render_markdown(
                     )
                     + " |"
                 )
+        lines.append("")
+
+        lines.append("### Macro Average Across JDs")
+        lines.append("")
+        lines.append("| Matcher | Selected | Useful precision | Useful+marginal precision | Useful recall | Top-3 supported |")
+        lines.append("| --- | ---: | ---: | ---: | ---: | ---: |")
+        for matcher_name in ("keyword", "semantic"):
+            metrics = []
+            for item in evals:
+                result = item.keyword if matcher_name == "keyword" else item.semantic
+                metrics.append(
+                    score_matches(
+                        result.strong_matches + result.weak_matches,
+                        label_cases[item.jd_path.name],
+                    )
+                )
+            count = len(metrics)
+            lines.append(
+                "| "
+                + " | ".join(
+                    [
+                        matcher_name,
+                        str(sum(metric.selected_count for metric in metrics)),
+                        _pct(sum(metric.useful_precision for metric in metrics) / count),
+                        _pct(sum(metric.supported_precision for metric in metrics) / count),
+                        _pct(sum(metric.useful_recall for metric in metrics) / count),
+                        _pct(sum(metric.top3_supported_precision for metric in metrics) / count),
+                    ]
+                )
+                + " |"
+            )
         lines.append("")
 
     lines.append("## Summary Table")
@@ -253,11 +331,30 @@ def main(argv: list[str] | None = None) -> int:
     label_cases = None
     if labels_path.exists():
         reviewer, label_cases = load_audit_labels(labels_path)
+        facts_path = resolve_facts_path(project_root / "data" / "facts" / "facts.json")
+        fact_ids = {fact.id for fact in load_facts(facts_path)}
+        coverage_errors = validate_label_coverage(jd_paths, fact_ids, label_cases)
+        if coverage_errors:
+            print("Matcher evaluation blocked: audit labels are incomplete or stale.")
+            for error in coverage_errors:
+                print(f"- {error}")
+            return 2
+    else:
+        facts_path = resolve_facts_path(project_root / "data" / "facts" / "facts.json")
 
     output_path = args.output or project_root / "data" / "evaluation" / "matcher_report.md"
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(
-        render_markdown(evals, label_cases=label_cases, reviewer=reviewer),
+        render_markdown(
+            evals,
+            label_cases=label_cases,
+            reviewer=reviewer,
+            source_hashes={
+                "facts": _sha256(facts_path),
+                **({"labels": _sha256(labels_path)} if labels_path.exists() else {}),
+                **{f"jd:{path.name}": _sha256(path) for path in jd_paths},
+            },
+        ),
         encoding="utf-8",
     )
     print(f"Matcher evaluation written: {output_path}")

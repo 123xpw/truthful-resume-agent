@@ -139,6 +139,34 @@ def load_authorizations(project_root: Path) -> dict[str, dict[str, Any]]:
     return raw if isinstance(raw, dict) else {}
 
 
+def load_valid_authorizations(project_root: Path) -> dict[str, dict[str, Any]]:
+    """Return only authorizations whose fact/fragment content still matches.
+
+    This is the application-independent authorized inventory. It lets a new
+    JD rank every unchanged A/B fragment instead of treating matcher recall as
+    an existence gate. C/D records remain visible to callers as blocked items.
+    """
+    valid: dict[str, dict[str, Any]] = {}
+    for authorization_id, record in load_authorizations(project_root).items():
+        source_fact_ids = record.get("source_fact_ids")
+        if not isinstance(source_fact_ids, list) or not all(
+            isinstance(fact_id, str) for fact_id in source_fact_ids
+        ):
+            continue
+        identity = _authorization_identity(project_root, source_fact_ids, authorization_id)
+        if identity is None:
+            continue
+        resolved_id, content_hash = identity
+        if (
+            resolved_id == authorization_id
+            and record.get("content_hash") == content_hash
+            and record.get("confirmed_via") == INTERACTIVE_CONFIRMATION
+            and record.get("level") in AUTHORIZATION_LABELS
+        ):
+            valid[authorization_id] = record
+    return valid
+
+
 def _write_authorizations(project_root: Path, authorizations: dict[str, dict[str, Any]]) -> Path:
     path = authorization_path(project_root)
     path.parent.mkdir(parents=True, exist_ok=True)

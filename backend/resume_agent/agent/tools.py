@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 from langchain_core.tools import tool
 
 from ..fact_store import load_facts
@@ -9,32 +11,55 @@ from ..fact_store import load_facts
 
 @tool
 def search_facts(query: str) -> str:
-    """检索事实库，返回与 query 相关的事实（编号 + 标题 + 摘要 + 边界）。"""
+    """检索事实库，返回机器可读的事实证据包。"""
     facts = load_facts()
-    tokens = query.lower().split()
+    normalized_query = query.lower()
+    tokens = normalized_query.split()
     scored = []
     for fact in facts:
-        haystack = f"{fact.summary} {' '.join(fact.keywords)}".lower()
-        score = sum(1 for token in tokens if token in haystack)
+        haystack = f"{fact.id} {fact.title} {fact.summary} {' '.join(fact.keywords)}".lower()
+        keyword_hits = sum(1 for keyword in fact.keywords if keyword.lower() in normalized_query)
+        score = keyword_hits * 3 + sum(1 for token in tokens if token in haystack)
         if score > 0:
             scored.append((score, fact))
     scored.sort(key=lambda item: -item[0])
+    payload = {
+        "query": query,
+        "matches": [
+            {
+                "fact_id": fact.id,
+                "title": fact.title,
+                "summary": fact.summary,
+                "boundaries": list(fact.boundaries),
+                "risk": fact.risk,
+                "lexical_score": score,
+            }
+            for score, fact in scored[:5]
+        ],
+    }
     if not scored:
-        return "事实库中没有与查询相关的事实。"
-    lines = []
-    for score, fact in scored[:5]:
-        lines.append(f"- [{fact.id}] {fact.title}")
-        lines.append(f"  摘要: {fact.summary[:160]}")
-        boundaries = "; ".join(fact.boundaries)[:200]
-        lines.append(f"  边界: {boundaries}")
-    return "\n".join(lines)
+        payload["message"] = "事实库中没有与查询相关的事实。"
+    return json.dumps(payload, ensure_ascii=False)
 
 
 @tool
-def verify_fact(fact_id: str) -> str:
-    """校验某个事实编号是否存在于事实库，返回其边界与风险等级。"""
+def verify_fact(fact_id: str, claim: str = "") -> str:
+    """返回校验一条具体 claim 所需的完整事实与边界；不替代最终语义判断。"""
     for fact in load_facts():
         if fact.id == fact_id:
-            boundaries = "; ".join(fact.boundaries)
-            return f"事实 {fact_id} 存在。风险等级: {fact.risk}。边界: {boundaries}"
-    return f"事实 {fact_id} 不存在于事实库。"
+            return json.dumps(
+                {
+                    "exists": True,
+                    "fact_id": fact.id,
+                    "claim": claim,
+                    "title": fact.title,
+                    "summary": fact.summary,
+                    "boundaries": list(fact.boundaries),
+                    "risk": fact.risk,
+                },
+                ensure_ascii=False,
+            )
+    return json.dumps(
+        {"exists": False, "fact_id": fact_id, "claim": claim},
+        ensure_ascii=False,
+    )

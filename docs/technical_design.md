@@ -9,18 +9,87 @@ The technical design should support two usage modes:
 - CLI or local web app for the private user.
 - Desensitized demo mode for GitHub and interviews.
 
+The deterministic path stays local. Optional LLM paths are an explicit data
+boundary: JD text, retrieved fact summaries/boundaries, chat content, or resume
+text may be sent to the configured provider, and the current MVP does not
+automatically redact those inputs.
+
 ## Architecture
+
+The project evolved from a single-module CLI tool into a three-layer system: core decision layer, conversational agent layer, and web UI layer.
+
+### Layered Module Map
+
+```text
+backend/resume_agent/
+├── core decision layer (CLI pipeline)
+│   ├── analyzer.py            # dual-matcher: keyword + semantic
+│   ├── rules.py               # Fact + NOT_WRITABLE_TECH (evidence-driven)
+│   ├── fact_store.py          # single source of truth for facts
+│   ├── jd_insight.py          # Tier A (rule) + Tier B (LLM) + 4 guardrails
+│   ├── resume_generator.py    # LaTeX generator (never imports LLM phrasing)
+│   ├── selection.py           # deterministic or ID-restricted candidate ranking
+│   ├── authorization_store.py # content-hash-bound reusable wording authorization
+│   ├── layout_config.py       # dynamic fragment ordering (display_priority)
+│   ├── fragments.py           # ResumeFragment schema + mtime-aware cache
+│   ├── decision_flow.py       # interactive A/B/C/D confirmation
+│   ├── aeo_review.py           # screening-model interpretation of actual JD + TeX
+│   ├── canonical.py            # actual TeX/PDF bullet provenance + SHA256 audit
+│   ├── outcomes.py             # observed application state + actual PDF hash
+│   ├── delivery.py            # filename sanitization + artifact output
+│   ├── cli.py                 # CLI entry: prepare → authorize → finalize → deliver
+│   └── smoke_test.py          # end-to-end regression suite
+│
+├── semantic/ (retrieval subsystem)
+│   ├── embedder.py            # fastembed multilingual MiniLM
+│   ├── chunker.py             # fact → natural sentence (one chunk per fact)
+│   ├── index.py                # Qdrant local COSINE collection + meta sidecar
+│   ├── retriever.py            # query_points nearest-neighbor
+│   ├── guardrails.py           # find_blocked_terms (evidence-driven blocklist)
+│   ├── guarded_search.py       # dual-rail: blocked_terms + min_score floor
+│   ├── thresholds.py           # shared score thresholds
+│   ├── jd_eval.py              # evaluation framework (real JD runs)
+│   └── keyword_baseline.py     # keyword matcher baseline for comparison
+│
+├── agent/ (LangGraph conversational layer)
+│   ├── graph.py                # retrieve→generate→verify→reflect closed loop
+│   ├── tools.py                # search_facts / verify_fact (simplified for LLM)
+│   ├── prompts.py              # SYSTEM_PROMPT (truthfulness gate principle)
+│   ├── memory.py               # save/recall/delete/list preferences (JSON)
+│   └── chat.py                 # REPL: prefs / 记住 / 忘记 commands
+│
+├── web/ (FastAPI UI layer)
+│   ├── app.py                  # REST endpoints + static serving
+│   └── templates/index.html    # 5-tab SPA (vanilla JS, no build step)
+│
+└── memory evolution (three-layer feedback loop)
+    ├── interview_feedback.py   # record-interview: interview Q&A → boundary回写
+    ├── gap_trends.py           # career-trends: cross-JD gap snapshot diff
+    └── mastery_history.py      # mastery-history: C→B→A timeline tracking
+```
+
+### End-to-End Data Flow
 
 ```text
 User JD input
-  -> JD memory writer
-  -> JD parser
-  -> requirement extractor
-  -> hybrid retrieval over fact bank
-  -> match and risk classifier
-  -> resume strategy generator
-  -> bullet draft generator
-  -> manual review record
+  → CLI (prepare)
+     → analyzer.py: keyword + semantic dual-matcher (merge_keyword_floor)
+     → rules.py: find_not_writable (evidence-driven blocklist)
+     → jd_insight.py: Tier A (structural) + Tier B (LLM advisory)
+  → Human-in-the-loop (authorize; decide is a legacy alias)
+     → A/B/C/D per-fact confirmation → confirmed_facts
+  → CLI (finalize)
+     → selection.py: build_selection_plan (capacity-bounded)
+     → resume_generator.py: LaTeX from fragments (no LLM phrasing import)
+  → CLI (deliver)
+     → delivery.py: sanitized filename + artifacts
+  → Actual artifact audit
+     → aeo_review.py: advisory first-screen interpretation of JD + TeX
+     → canonical.py: professional-bullet provenance + actual TeX/PDF SHA256
+
+Conversational Agent (parallel surface, does not write resume):
+  chat.py → graph.py: retrieve → generate → verify → reflect loop
+  memory.py: long-term JSON preferences injected at generate node
 ```
 
 ## Storage Strategy
@@ -210,20 +279,24 @@ Each analysis run should produce:
 - `jd_insight.md` / `jd_insight.html` — Tier A (rule-based) + Tier B (LLM) JD analysis
 - `gap_report.md` — unmatched JD requirements with gap classification
 - `gap_warning.md` / `gap_warning.html` — prioritized gap warnings for interview prep
+- `aeo_review.md` / `aeo_review.html` — advisory AI-screening interpretation of the actual JD + TeX
+- `canonical_audit.md` / `canonical_audit.json` — per-bullet provenance and actual artifact hashes
+- `canonical_provenance.todo.json` — blocked manual bullets requiring candidate confirmation
+- `canonical_delivery.json` — ready-only manifest for the exact TeX/PDF pair
 
 ## Conversational Agent & Memory
 
-A LangChain + LangGraph conversational agent (`backend/resume_agent/agent/`) sits alongside the deterministic CLI pipeline. It is a separate interaction surface; it does **not** replace the `prepare → decide → finalize → deliver` status machine and cannot write resume artifacts.
+A LangChain + LangGraph conversational agent (`backend/resume_agent/agent/`) sits alongside the deterministic CLI pipeline. It is a separate interaction surface; it does **not** replace the `prepare → authorize → finalize → deliver` status machine and cannot write resume artifacts. `decide` remains a backward-compatible alias.
 
 ### Graph Topology
 
-The state graph implements a retrieve → generate → verify → reflect loop:
+The state graph implements a retrieve → generate → verify → reflect loop. Retrieval tool output is retained as a full evidence bundle, candidate claims must cite an allowed `fact_id`, verifier responses use strict JSON, and malformed responses fail closed:
 
 ```text
 START
   -> retrieve   (binds search_facts / verify_fact tools)
   -> generate   (drafts an answer, injects long-term preferences)
-  -> verify     (PASS / FAIL gate)
+  -> verify     (strict JSON PASS / FAIL against summary + boundaries)
   -> conditional edge:
        PASS        -> END
        FAIL < 3 turns -> reflect -> retrieve  (retry)
@@ -282,7 +355,44 @@ The LLM path is used only for general questions; it never updates facts, fragmen
 
 ### Phase 5: Web App
 
-- JD paste page
-- Match matrix page
-- Resume strategy page
-- Version history page
+FastAPI-based web UI (`backend/resume_agent/web/`):
+
+- `app.py` — REST endpoints for JD analysis, application status, gap trends, mastery history, interview feedback, and static SPA serving.
+- `templates/index.html` — 5-tab vanilla-JS diagnostics SPA (no build step): JD 分析 / 申请列表 / 缺口趋势 / Mastery 时间线 / 面试反馈.
+- Start with `.venv/bin/uvicorn backend.resume_agent.web.app:app --reload`.
+
+The Web layer reuses core modules but does **not** mirror the CLI 1:1. Candidate authorization, finalization, AEO review, canonical registration, and delivery remain CLI-only in the current MVP.
+
+## Memory Evolution: Three-Layer Feedback Loop
+
+Beyond the conversational short-term / long-term memory, the project implements a three-layer feedback loop that lets the fact bank self-correct over multiple JD cycles:
+
+### Layer 1: Interview Feedback → Fact Bank Self-Correction
+
+`interview_feedback.py` + CLI `record-interview`:
+
+- After each interview, the user records the questions asked and which facts were challenged.
+- `--append-boundary <fact_id> <text>` writes new boundary clauses back into `facts.json`, so the fact bank learns from real interview exposure.
+- `list-interview` reviews past records to prepare for similar roles.
+
+### Layer 2: Cross-JD Gap Accumulation
+
+`gap_trends.py` + CLI `career-trends`:
+
+- Each `prepare` run snapshots the current not-writable technologies.
+- `career-trends` compares the latest snapshot against the previous one, showing:
+  - **new gaps** — technologies newly appearing in JDs but still unsupported.
+  - **closed gaps** — technologies that were previously not-writable but now have fact-bank evidence.
+- This turns one-off gap warnings into a trend signal for study prioritization.
+
+### Layer 3: Mastery Timeline Tracking
+
+`mastery_history.py` + CLI `mastery-history`:
+
+- After each successful `authorize` (or legacy `decide`), the user's per-fact mastery level (A/B/C) is snapshotted; identical consecutive snapshots are deduplicated.
+- `mastery-history` displays the C→B→A progression timeline per fact.
+- This makes skill growth visible and motivates revisiting weak facts.
+
+### Design Principle
+
+The three layers share one principle: **the fact bank is a living artifact, not a static resume**. Interview feedback writes back boundaries, gap trends accumulate across JDs, and mastery progression tracks how facts improve over time. Together they close the loop between "apply → interview → learn → re-apply."

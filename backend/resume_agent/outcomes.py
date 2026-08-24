@@ -6,6 +6,8 @@ import hashlib
 import json
 from pathlib import Path
 
+from .io_utils import atomic_write_text
+
 
 VALID_OUTCOMES = {
     "applied",
@@ -24,6 +26,7 @@ class OutcomeEvent:
     status: str
     date: str
     resume_sha256: str | None
+    resume_path: str | None
     note: str
 
 
@@ -31,9 +34,11 @@ def default_outcome_path(project_root: Path) -> Path:
     return project_root / "data" / "application_outcomes.json"
 
 
-def _resume_hash(project_root: Path, application: str) -> str | None:
-    path = project_root / "data" / "outputs" / application / "resume_draft.pdf"
-    return hashlib.sha256(path.read_bytes()).hexdigest() if path.exists() else None
+def _resume_hash(project_root: Path, application: str, resume_path: Path | None = None) -> tuple[str | None, str | None]:
+    path = resume_path or project_root / "data" / "outputs" / application / "resume_draft.pdf"
+    resolved = str(path.resolve()) if path.exists() else None
+    digest = hashlib.sha256(path.read_bytes()).hexdigest() if path.exists() else None
+    return digest, resolved
 
 
 def load_outcomes(path: Path) -> list[OutcomeEvent]:
@@ -46,6 +51,7 @@ def load_outcomes(path: Path) -> list[OutcomeEvent]:
             status=str(item["status"]),
             date=str(item["date"]),
             resume_sha256=str(item["resume_sha256"]) if item.get("resume_sha256") else None,
+            resume_path=str(item["resume_path"]) if item.get("resume_path") else None,
             note=str(item.get("note", "")),
         )
         for item in raw
@@ -59,6 +65,7 @@ def record_outcome(
     event_date: str | None = None,
     note: str = "",
     path: Path | None = None,
+    resume_path: Path | None = None,
 ) -> OutcomeEvent:
     if status not in VALID_OUTCOMES:
         raise ValueError(f"status must be one of: {', '.join(sorted(VALID_OUTCOMES))}")
@@ -67,11 +74,13 @@ def record_outcome(
         date.fromisoformat(effective_date)
     except ValueError as exc:
         raise ValueError("event date must use YYYY-MM-DD") from exc
+    resume_sha256, resolved_resume_path = _resume_hash(project_root, application, resume_path)
     event = OutcomeEvent(
         application=application,
         status=status,
         date=effective_date,
-        resume_sha256=_resume_hash(project_root, application),
+        resume_sha256=resume_sha256,
+        resume_path=resolved_resume_path,
         note=note,
     )
     outcome_path = path or default_outcome_path(project_root)
@@ -90,10 +99,9 @@ def record_outcome(
     if duplicate is not None:
         return duplicate
     events.append(event)
-    outcome_path.parent.mkdir(parents=True, exist_ok=True)
-    outcome_path.write_text(
+    atomic_write_text(
+        outcome_path,
         json.dumps([asdict(item) for item in events], ensure_ascii=False, indent=2),
-        encoding="utf-8",
     )
     return event
 

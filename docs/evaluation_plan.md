@@ -20,6 +20,7 @@ Target for MVP:
 
 - 100 percent source coverage.
 - Zero unsupported technologies in final draft.
+- Zero untraced professional bullets in a registered canonical TeX/PDF pair.
 
 ### 2. JD Matching Quality
 
@@ -36,6 +37,13 @@ Target for MVP:
 - At least 80 percent of selected facts are useful or marginal.
 - No irrelevant fact should be placed in the first section.
 
+Current reproducible baseline uses a complete 4-JD x 11-fact label matrix:
+
+- Keyword macro useful recall / precision: 80% / 64%.
+- Semantic macro useful recall / precision: 88% / 56%.
+- Semantic retrieval remains opt-in because the data-role sample contains an
+  irrelevant selection.
+
 ### 3. Risk Control
 
 Question: Does the system identify interview risks before resume submission?
@@ -48,7 +56,8 @@ Metrics:
 
 Target for MVP:
 
-- Zero false-safe on explicitly unsupported technologies such as RAG, vector database, Redis, RocketMQ, MCP, or Docker unless fact-bank evidence exists.
+- Zero false-safe on explicitly unsupported technologies such as Kubernetes,
+  Redis, RocketMQ, MCP, or Docker unless current fact-bank evidence exists.
 
 ### 4. Usefulness
 
@@ -65,25 +74,37 @@ Target for MVP:
 - Produce a first strategy report within one minute for a pasted JD.
 - Reduce repeated manual review steps by saving JD memory and past decisions.
 
-### 5. Interview Defensibility
+### 5. Interview Defensibility and Screening Interpretation
 
 Question: Can the user answer likely follow-up questions from generated bullets?
 
 Metrics:
 
-- Each bullet has at least one likely follow-up question.
-- Each high-density bullet has a preparation note.
-- User can mark bullet status: accepted, lower-risk rewrite, rejected, needs study, needs evidence.
+- Candidate can authorize core/conservative wording or veto the fact with A/B/C/D.
+- AEO review reports likely screening persona, red flags, business-problem fit,
+  and possible misreadings over the actual JD and TeX source.
+- Interview feedback can be attached to a known fact and optionally appended as
+  a new boundary.
+
+### 6. Public Reproducibility
+
+Question: Does the repository work without the private runtime files used by
+the maintainer?
+
+Metrics:
+
+- `validate`, the smoke suite, Agent tests, matcher evaluation, and retrieval
+  sanity check pass in a clean clone containing only `*.example.json` data.
+- CI uses no private profile, facts, fragments, JD library, or API key.
 
 ## Test Set
 
-Use real but desensitized JD cases:
+The audited matcher set uses the four public sample files:
 
-- Tencent AI Application Engineer
-- OPPO IT Development Engineer, AI Application
-- JD Data Application Engineer
-- Converge AI KOL Product Operations
-- ByteDance AI Application Engineer
+- `ai_agent_engineer.md`
+- `alibaba_ai_agent_engineer.md`
+- `jd_data_application.md`
+- `tencent_ai_application.md`
 
 For each JD, store:
 
@@ -112,3 +133,6 @@ The system fails if it:
 - Treats AI-assisted generation as independent implementation.
 - Ignores obvious JD gaps.
 - Produces a resume without risk review.
+- Registers a hand-edited canonical resume whose professional bullets have no
+  current authorization or candidate-confirmed provenance.
+- Passes locally only because private ignored files happen to exist.

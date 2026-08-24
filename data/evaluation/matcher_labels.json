@@ -1,5 +1,5 @@
 {
-  "reviewer": "codex_audit_2026-08-15",
+  "reviewer": "codex_audit_2026-08-21",
   "status": "reviewable_baseline_not_candidate_ground_truth",
   "label_definition": {
     "useful": "Directly supports a visible responsibility or requirement and is worth considering for the targeted resume.",
@@ -9,43 +9,55 @@
   "cases": {
     "ai_agent_engineer.md": {
       "intern_optimization_ai_coding": {"label": "useful", "rationale": "Direct AI Coding and documentation/verification workflow evidence."},
+      "intern_solver_integration_clarabel": {"label": "marginal", "rationale": "Shows C++ integration and AI-assisted engineering, but not an Agent application."},
+      "intern_scip_heuristic_analysis": {"label": "marginal", "rationale": "Shows AI-assisted code analysis and a bounded C++ implementation, but not Agent delivery."},
       "intern_data_automation": {"label": "marginal", "rationale": "Python and workflow automation are relevant, but there is no LLM or Agent implementation."},
       "intern_csharp_ai_mvp": {"label": "useful", "rationale": "A real multimodal application workflow with structured output and deterministic rules."},
       "project_chinese_learning_mvp": {"label": "useful", "rationale": "User-facing AI application and Coze Agent demo experience."},
       "project_emotion_pixel_eval": {"label": "useful", "rationale": "LLM application pipeline plus explicit effect evaluation."},
       "project_dl_learning_lab": {"label": "irrelevant", "rationale": "Model-learning exercises do not support Agent application delivery."},
       "project_truthful_resume_agent_cli": {"label": "useful", "rationale": "End-to-end AI-assisted workflow, review gates, and reusable reports."},
-      "project_truthful_resume_agent_rag_qdrant": {"label": "useful", "rationale": "Direct RAG, vector retrieval, and grounded-generation evidence."}
+      "project_truthful_resume_agent_rag_qdrant": {"label": "useful", "rationale": "Direct RAG, vector retrieval, and bounded-generation evidence."},
+      "project_truthful_resume_agent_agent": {"label": "useful", "rationale": "Direct LangGraph, tool-calling, evidence-bundle verification, and memory implementation."}
     },
     "alibaba_ai_agent_engineer.md": {
       "intern_optimization_ai_coding": {"label": "marginal", "rationale": "Strong AI Coding usage, but the work is code analysis rather than AI application architecture."},
+      "intern_solver_integration_clarabel": {"label": "marginal", "rationale": "Demonstrates engineering integration and fallback design, but not an AI-native business system."},
+      "intern_scip_heuristic_analysis": {"label": "marginal", "rationale": "Demonstrates structured analysis and bounded implementation, but not Agent architecture."},
       "intern_data_automation": {"label": "marginal", "rationale": "Python/API automation supports engineering basics but not the core Agent system requirements."},
       "intern_csharp_ai_mvp": {"label": "useful", "rationale": "Real AI application MVP with model interaction and deterministic fallback rules."},
       "project_chinese_learning_mvp": {"label": "useful", "rationale": "AI product prototype and Agent demo match application-delivery responsibilities."},
       "project_emotion_pixel_eval": {"label": "useful", "rationale": "LLM pipeline and evaluation loop support AI application iteration."},
       "project_dl_learning_lab": {"label": "marginal", "rationale": "Shows AI foundations, but not production Agent or business-system delivery."},
       "project_truthful_resume_agent_cli": {"label": "useful", "rationale": "Project-level workflow, deterministic guardrails, and AI-assisted engineering are directly relevant."},
-      "project_truthful_resume_agent_rag_qdrant": {"label": "useful", "rationale": "Direct evidence for RAG, retrieval, grounding, and hallucination-risk handling."}
+      "project_truthful_resume_agent_rag_qdrant": {"label": "useful", "rationale": "Direct evidence for RAG, retrieval, grounding, and hallucination-risk handling."},
+      "project_truthful_resume_agent_agent": {"label": "useful", "rationale": "Direct evidence for LangChain/LangGraph, tool orchestration, reflection, and two-layer memory."}
     },
     "jd_data_application.md": {
       "intern_optimization_ai_coding": {"label": "marginal", "rationale": "Complex-code analysis is engineering evidence but does not show data platform or modeling work."},
+      "intern_solver_integration_clarabel": {"label": "irrelevant", "rationale": "Solver-backend integration does not support this JD's ETL, warehouse, SQL, or data-service work."},
+      "intern_scip_heuristic_analysis": {"label": "irrelevant", "rationale": "MIP heuristic analysis does not support this JD's data-platform responsibilities."},
       "intern_data_automation": {"label": "useful", "rationale": "Direct Python, API data processing, scheduled execution, and report automation evidence."},
       "intern_csharp_ai_mvp": {"label": "irrelevant", "rationale": "Warehouse recommendation demo does not support the stated data-platform responsibilities."},
       "project_chinese_learning_mvp": {"label": "irrelevant", "rationale": "UI and Agent demo work does not support SQL, ETL, or data modeling requirements."},
       "project_emotion_pixel_eval": {"label": "marginal", "rationale": "Contains experiment data and evaluation, but not data warehouse or service-platform work."},
       "project_dl_learning_lab": {"label": "marginal", "rationale": "Shows machine-learning familiarity but not data application engineering."},
       "project_truthful_resume_agent_cli": {"label": "marginal", "rationale": "Python workflow evidence is real but only indirectly relevant to a data-platform role."},
-      "project_truthful_resume_agent_rag_qdrant": {"label": "irrelevant", "rationale": "RAG retrieval is outside this JD's core data-platform requirements."}
+      "project_truthful_resume_agent_rag_qdrant": {"label": "irrelevant", "rationale": "RAG retrieval is outside this JD's core data-platform requirements."},
+      "project_truthful_resume_agent_agent": {"label": "marginal", "rationale": "Shows Python workflow orchestration, but not SQL, ETL, warehouse, or data modeling."}
     },
     "tencent_ai_application.md": {
       "intern_optimization_ai_coding": {"label": "marginal", "rationale": "AI Coding and requirement analysis are relevant but do not demonstrate an AI product feature."},
+      "intern_solver_integration_clarabel": {"label": "marginal", "rationale": "Shows engineering implementation and fallback design, but not a user-facing AI feature."},
+      "intern_scip_heuristic_analysis": {"label": "marginal", "rationale": "Shows AI-assisted technical analysis, but not LLM application delivery."},
       "intern_data_automation": {"label": "marginal", "rationale": "API automation is engineering evidence, but not an LLM application."},
       "intern_csharp_ai_mvp": {"label": "useful", "rationale": "Direct multimodal AI application MVP with structured output and business rules."},
       "project_chinese_learning_mvp": {"label": "useful", "rationale": "User-facing AI product and intelligent-dialogue demo evidence."},
       "project_emotion_pixel_eval": {"label": "useful", "rationale": "Content-generation pipeline and explicit effect evaluation match the JD."},
       "project_dl_learning_lab": {"label": "marginal", "rationale": "Shows model familiarity but not application delivery."},
       "project_truthful_resume_agent_cli": {"label": "useful", "rationale": "AI-assisted product workflow, requirement matching, and iterative review are relevant."},
-      "project_truthful_resume_agent_rag_qdrant": {"label": "useful", "rationale": "Direct RAG principles, vector retrieval, and grounded output checks."}
+      "project_truthful_resume_agent_rag_qdrant": {"label": "useful", "rationale": "Direct RAG principles, vector retrieval, and grounded output checks."},
+      "project_truthful_resume_agent_agent": {"label": "useful", "rationale": "Direct Agent workflow, tool-calling, evidence verification, and memory implementation."}
     }
   }
 }

@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from contextlib import redirect_stderr, redirect_stdout
+import hashlib
 import io
+import json
 import os
 from pathlib import Path
 import shutil
@@ -10,17 +12,19 @@ import tempfile
 from unittest.mock import patch
 
 from .analyzer import AnalysisResult, FactMatch, build_recommendations, merge_keyword_floor
+from .aeo_review import build_aeo_review, build_term_coverage, latex_to_screening_text
 from .authorization_store import (
     apply_reusable_authorizations,
     authorization_path,
     record_authorizations_from_review,
 )
 from .cli import main as cli_main
+from .canonical import audit_canonical_resume, register_canonical, write_canonical_audit
 from .decision_flow import run_interactive_decision
-from .eval_matchers import score_matches
+from .eval_matchers import score_matches, validate_label_coverage
 from .fact_store import load_facts
 from .fragments import ResumeFragment, load_fragments
-from .gap_trends import diff_against_last, load_snapshots, record_gap_snapshot
+from .gap_trends import diff_against_last, load_snapshots, record_gap_snapshot, render_career_trends_html
 from .interview_feedback import (
     append_boundary_to_facts,
     load_feedback,
@@ -35,6 +39,7 @@ from .jd_insight import (
     build_jd_insight_data,
     llm_interview_followups,
     llm_phrasing_candidates,
+    render_html,
 )
 from .llm_client import LLMNotConfigured, chat_completion, get_api_key
 from .mastery_history import (
@@ -42,7 +47,7 @@ from .mastery_history import (
     record_mastery_snapshot,
     render_mastery_history,
 )
-from .outcomes import default_outcome_path, load_outcomes
+from .outcomes import default_outcome_path, load_outcomes, record_outcome
 from .profile import EducationProfile, ResumeProfile, SkillProfile, load_profile
 from .quality import check_resume_quality
 from .review_parser import count_pending_review_items, parse_review_mastery, write_review_state
@@ -51,6 +56,7 @@ from .resume_generator import (
     _escape_unescaped_percent,
     _choose_internship_order,
     _choose_project_order,
+    _eligible_fragment_levels,
     _select_profile_skills,
 )
 from .rules import Fact, find_not_writable
@@ -180,6 +186,35 @@ def _copy_required_data(temp_root: Path) -> None:
         target = temp_root / relative
         if source.exists():
             shutil.copytree(source, target)
+
+    # A public clone intentionally contains only desensitized *.example.json
+    # files. Materialize the same private-runtime filenames inside the isolated
+    # smoke fixture so tests exercise both public-clone and private-workspace
+    # layouts instead of passing only when the developer has private data.
+    runtime_fallbacks = (
+        ("data/facts/facts.json", "data/facts/facts.example.json"),
+        ("data/resume_fragments/fragments.json", "data/resume_fragments/fragments.example.json"),
+        ("data/profile/profile.private.json", "data/profile/profile.example.json"),
+    )
+    for runtime_relative, example_relative in runtime_fallbacks:
+        runtime_path = temp_root / runtime_relative
+        example_path = temp_root / example_relative
+        if not runtime_path.exists() and example_path.exists():
+            runtime_path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(example_path, runtime_path)
+
+    # Keep the profile-skill omission assertion independent from whichever
+    # private or desensitized profile happens to exist in the source tree.
+    profile_path = temp_root / "data" / "profile" / "profile.private.json"
+    if profile_path.exists():
+        profile_data = json.loads(profile_path.read_text(encoding="utf-8"))
+        profile_data.setdefault("skills", []).append(
+            {"text": "Smoke unlinked profile skill", "source_fact_ids": []}
+        )
+        profile_path.write_text(
+            json.dumps(profile_data, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
 
 
 def _run_cli(argv: list[str]) -> tuple[int, str]:
@@ -343,6 +378,128 @@ def _assert_selection_is_id_restricted_and_capacity_bounded(temp_root: Path) -> 
             raise AssertionError("LLM selection accepted a fabricated fragment ID")
 
 
+def _assert_complete_authorized_inventory_is_matcher_independent(temp_root: Path) -> None:
+    fragments = load_fragments(temp_root / "data" / "resume_fragments" / "fragments.json")
+    review_mastery = {
+        "intern_optimization_ai_coding": "A",
+        "intern_solver_integration_clarabel": "A",
+    }
+    global_authorizations = {
+        # This internship is deliberately absent from review_mastery: a new
+        # JD matcher miss must not erase a previously authorized experience.
+        "intern_data_automation": {"level": "A"},
+        "intern_csharp_ai_mvp": {"level": "C"},
+    }
+    levels, excluded = _eligible_fragment_levels(
+        fragments,
+        review_mastery,
+        global_authorizations,
+    )
+    _assert("intern_optimization_combined" in levels, "current composite review decision was lost")
+    _assert("intern_data_automation" in levels, "unmatched globally authorized internship was erased")
+    excluded_by_id = {item_id: reason for item_id, _title, reason in excluded}
+    _assert("intern_csharp_ai_mvp" in excluded_by_id, "globally blocked internship was not disclosed")
+
+
+def _assert_canonical_resume_requires_complete_provenance(temp_root: Path) -> None:
+    fixture = temp_root / "canonical_fixture"
+    fixture.mkdir(parents=True, exist_ok=True)
+    tex_path = fixture / "resume.tex"
+    pdf_path = fixture / "resume.pdf"
+    tex_path.write_text(
+        r"""\section{项目经历}
+\begin{resumeItems}
+  \item \textbf{手工改写：}使用 Python 构建数据自动化流程。
+\end{resumeItems}
+\section{实习经历}
+\begin{resumeItems}
+  \item \textbf{接口处理：}对接 REST API 并处理失败重试。
+\end{resumeItems}
+\section{专业技能}
+\begin{resumeItems}
+  \item Python
+\end{resumeItems}
+""",
+        encoding="utf-8",
+    )
+    pdf_path.write_bytes(b"%PDF-1.4\ncanonical fixture\n")
+    blocked = audit_canonical_resume(temp_root, "canonical_smoke", tex_path, pdf_path)
+    _assert(not blocked.ready and len(blocked.bullets) == 2, "untraced canonical bullets were accepted")
+    output_dir = temp_root / "data" / "outputs" / "canonical_smoke"
+    _report, _audit_json, todo_path = write_canonical_audit(blocked, output_dir)
+    _assert(todo_path is not None and todo_path.exists(), "canonical provenance todo was not written")
+
+    provenance_path = fixture / "provenance.json"
+    provenance_path.write_text(
+        json.dumps(
+            {
+                "bullets": [
+                    {
+                        "text_sha256": bullet.text_sha256,
+                        "source_fact_ids": ["intern_data_automation"],
+                        "candidate_confirmed": True,
+                    }
+                    for bullet in blocked.bullets
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    ready = audit_canonical_resume(
+        temp_root,
+        "canonical_smoke",
+        tex_path,
+        pdf_path,
+        provenance_path=provenance_path,
+    )
+    _assert(ready.ready, f"candidate-confirmed canonical provenance remained blocked: {ready.reasons}")
+    manifest_path = register_canonical(ready, output_dir)
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    _assert(manifest["pdf_sha256"] == hashlib.sha256(pdf_path.read_bytes()).hexdigest(), "canonical PDF hash mismatch")
+    _assert(len(manifest["bullets"]) == 2, "canonical manifest lost professional bullets")
+    outcome = record_outcome(
+        temp_root,
+        "canonical_smoke",
+        "applied",
+        event_date="2026-08-21",
+        path=fixture / "outcomes.json",
+        resume_path=pdf_path,
+    )
+    _assert(outcome.resume_sha256 == manifest["pdf_sha256"], "outcome did not hash the actual canonical PDF")
+    _assert(outcome.resume_path == str(pdf_path.resolve()), "outcome did not preserve the canonical PDF path")
+
+
+def _assert_aeo_review_checks_actual_resume_and_parses_screening_model(temp_root: Path) -> None:
+    plain = latex_to_screening_text(r"\section{项目经历}\item 使用 RAG 与 FastAPI\%")
+    _assert("RAG" in plain and "FastAPI" in plain, "LaTeX screening text extraction lost visible terms")
+    coverage = build_term_coverage("要求 RAG、FastAPI、MCP", plain)
+    by_term = {item.term: item.status for item in coverage}
+    _assert(by_term["RAG"] == "supported_explicit", "fact-backed explicit RAG was misclassified")
+    _assert(by_term["FastAPI"] == "supported_explicit", "fact-backed explicit FastAPI was misclassified")
+    _assert(by_term["MCP"] == "unsupported_do_not_add", "unsupported missing MCP was not blocked")
+
+    fixture = temp_root / "aeo_fixture"
+    fixture.mkdir(parents=True, exist_ok=True)
+    jd_path = fixture / "jd.md"
+    resume_path = fixture / "resume.tex"
+    jd_path.write_text("# 岗位要求\n- 负责 RAG 与 Agent 应用。", encoding="utf-8")
+    resume_path.write_text(r"\section{项目经历}\begin{resumeItems}\item 实现 RAG 与 Agent。\end{resumeItems}", encoding="utf-8")
+    llm_response = json.dumps(
+        {
+            "persona": "事实约束型 AI 应用工程候选人",
+            "red_flags": ["规模化证据有限"],
+            "business_problem_fit": ["能够构建受控检索工作流"],
+            "likely_misreadings": ["可能被误读为生产级平台"],
+            "rewrite_priorities": ["明确本地个人事实库规模"],
+        },
+        ensure_ascii=False,
+    )
+    with patch("backend.resume_agent.aeo_review.chat_completion", return_value=llm_response):
+        review = build_aeo_review(jd_path, resume_path, use_llm=True)
+    _assert(review.persona == "事实约束型 AI 应用工程候选人", "AEO persona parsing failed")
+    _assert(review.likely_misreadings, "AEO misreading analysis missing")
+
+
 def _confirm_all_pending_as_b(review_path: Path) -> None:
     text = review_path.read_text(encoding="utf-8")
     text = text.replace("- mastery_check: `待确认`", "- mastery_check: `B smoke confirmed`")
@@ -416,6 +573,10 @@ def _assert_jd_insight_structural_extraction() -> None:
     )
     data = build_jd_insight_data(Path("raw_jd.md"), "熟悉 RAG，了解 LangChain。", result, use_llm=False)
     _assert(not data.structural_split_found, "heading-free JD should degrade instead of guessing structure")
+    rendered = render_html(data)
+    _assert("LLM 生成" not in rendered, "no-LLM HTML rendered empty LLM cards")
+    _assert("JD 原文（点击展开）" in rendered, "raw JD was not moved into a collapsible appendix")
+    _assert(rendered.index("和事实库的匹配点") < rendered.index("JD 原文（点击展开）"), "raw JD still dominated the first screen")
 
 
 def _assert_jd_insight_not_writable_classification() -> None:
@@ -469,6 +630,21 @@ def _assert_not_writable_terms_are_evidence_checks() -> None:
     _assert("RAG" not in blocked_terms, "semantic guardrail did not share RAG evidence check")
     _assert("向量数据库" not in blocked_terms, "semantic guardrail did not share vector DB evidence check")
     _assert("LangChain" in blocked_terms, "semantic guardrail failed to keep unsupported LangChain blocked")
+
+    product_gaps = find_not_writable(
+        "加分项：了解 3D 打印，做过硬件项目，熟悉 MicroPython。",
+        [no_rag_fact],
+    )
+    _assert("3D 打印" in product_gaps, "unsupported 3D-printing gap was not blocked")
+    _assert("硬件项目" in product_gaps, "unsupported hardware-project gap was not blocked")
+    _assert("MicroPython" in product_gaps, "unsupported MicroPython gap was not blocked")
+
+    engineering_gaps = find_not_writable(
+        "要求 MySQL、分布式、高并发、高可用、K8s、消息队列、微调与多智能体经验。",
+        [no_rag_fact],
+    )
+    for term in ("MySQL", "分布式", "高并发", "高可用", "K8s", "消息队列", "微调", "多智能体"):
+        _assert(term in engineering_gaps, f"unsupported engineering gap was not blocked: {term}")
 
 
 def _assert_keyword_floor_merges_with_semantic_matches() -> None:
@@ -715,6 +891,22 @@ def _assert_matcher_metrics_count_false_positives() -> None:
     _assert(metrics.useful_recall == 0.5, "matcher metrics did not count the missed useful fact")
     _assert(metrics.irrelevant_ids == ("irrelevant_fact",), "matcher metrics lost irrelevant fact ids")
     _assert(metrics.missed_useful_ids == ("missed_fact",), "matcher metrics lost missed useful fact ids")
+
+
+def _assert_matcher_labels_must_cover_current_corpus() -> None:
+    jd_paths = [Path("a.md")]
+    complete = {
+        "a.md": {
+            "fact_a": {"label": "useful", "rationale": "direct evidence"},
+            "fact_b": {"label": "irrelevant", "rationale": "no role support"},
+        }
+    }
+    _assert(
+        validate_label_coverage(jd_paths, {"fact_a", "fact_b"}, complete) == [],
+        "complete matcher labels were rejected",
+    )
+    errors = validate_label_coverage(jd_paths, {"fact_a", "fact_b"}, {"a.md": {"fact_a": complete["a.md"]["fact_a"]}})
+    _assert(any("missing fact labels: fact_b" in error for error in errors), "stale matcher labels were not blocked")
 
 
 def _assert_llm_phrasing_candidates_are_advisory_and_screened() -> None:
@@ -1054,11 +1246,15 @@ def run_smoke() -> None:
         _assert_confirmed_decision_can_be_revisited(temp_root)
         _assert_quality_rejects_overfilled_selection(temp_root)
         _assert_selection_is_id_restricted_and_capacity_bounded(temp_root)
+        _assert_complete_authorized_inventory_is_matcher_independent(temp_root)
+        _assert_canonical_resume_requires_complete_provenance(temp_root)
+        _assert_aeo_review_checks_actual_resume_and_parses_screening_model(temp_root)
         _assert_jd_insight_structural_extraction()
         _assert_jd_insight_not_writable_classification()
         _assert_not_writable_terms_are_evidence_checks()
         _assert_keyword_floor_merges_with_semantic_matches()
         _assert_matcher_metrics_count_false_positives()
+        _assert_matcher_labels_must_cover_current_corpus()
         _assert_review_parser_supports_composite_fact_blocks(temp_root)
         _assert_resume_authorization_reuse_is_content_bound(temp_root)
         _assert_review_renders_composite_across_match_levels()
@@ -1226,14 +1422,11 @@ def run_smoke() -> None:
         tex_text = tex_path.read_text(encoding="utf-8")
         _assert("LangChain" in tex_text, "fact-backed LangChain Agent evidence was omitted from generated resume")
         _assert("MCP" not in tex_text, "not-writable MCP leaked into generated resume")
-        _assert(
-            "补充技能：Java, MySQL, PostgreSQL" not in tex_text,
-            "unlinked profile skills leaked into generated resume",
-        )
+        _assert("Smoke unlinked profile skill" not in tex_text, "unlinked profile skills leaked into generated resume")
         selection_text = (output_dir / "selection_plan.md").read_text(encoding="utf-8")
         _assert("## Profile Skills" in selection_text, "selection plan omitted the profile-skill audit")
         _assert(
-            "补充技能：Java, MySQL, PostgreSQL: no source_fact_ids" in selection_text,
+            "Smoke unlinked profile skill: no source_fact_ids" in selection_text,
             "selection plan did not explain the unlinked skill omission",
         )
 
@@ -1545,6 +1738,17 @@ def _assert_interview_feedback_roundtrip(temp_root: Path) -> None:
     items = load_feedback(temp_root, "smoke_test_app")
     _assert(len(items) == 1, f"load_feedback returned {len(items)} items, expected 1")
     _assert(items[0].question == "分页机制怎么实现的？", "feedback question mismatch")
+    try:
+        record_feedback(
+            project_root=temp_root,
+            application="smoke_test_app",
+            fact_id="fabricated_fact",
+            question="不存在的事实？",
+        )
+    except ValueError as exc:
+        _assert("unknown fact_id" in str(exc), "invalid interview fact failed unclearly")
+    else:
+        raise AssertionError("interview feedback accepted an unknown fact_id")
 
     # 损坏 JSON 容错
     feedback_path = temp_root / "data" / "outputs" / "smoke_test_app" / "interview_feedback.json"
@@ -1584,6 +1788,8 @@ def _assert_gap_trends_snapshot_diff(temp_root: Path) -> None:
     diff = diff_against_last(current, history[:-1])  # 对比第一次
     _assert("vLLM" in diff.added, "diff did not detect newly added gap")
     _assert("RAG" in diff.resolved, "diff did not detect resolved gap")
+    rendered_html = render_career_trends_html(2, current, diff)
+    _assert("vLLM" in rendered_html and "跨 JD 缺口趋势" in rendered_html, "career-trends HTML lost gap data")
 
 
 def _assert_mastery_history_progression(temp_root: Path) -> None:
@@ -1617,6 +1823,23 @@ def _assert_mastery_history_progression(temp_root: Path) -> None:
     rendered = render_mastery_history(history, fact_id="fact_a")
     _assert("improved +2" in rendered, f"progression label not rendered: {rendered}")
     _assert("C -> A" in rendered, f"progression arrow not rendered: {rendered}")
+
+    review_path = temp_root / "data" / "outputs" / "mastery_wire" / "review_sheet.md"
+    review_path.parent.mkdir(parents=True, exist_ok=True)
+    review_path.write_text(
+        """### Fact
+
+- fact_id: `intern_data_automation`
+- mastery_check: `A confirmed`
+- confirmed_via: `interactive_cli`
+""",
+        encoding="utf-8",
+    )
+    record_mastery_snapshot(temp_root, "mastery_wire", review_path, timestamp="2026-03-01T00:00:00+00:00")
+    record_mastery_snapshot(temp_root, "mastery_wire", review_path, timestamp="2026-03-02T00:00:00+00:00")
+    wired_history = load_mastery_history(temp_root)
+    matching = [item for item in wired_history if item.application == "mastery_wire"]
+    _assert(len(matching) == 1, "identical mastery decision created duplicate snapshots")
 
 
 def main() -> int:

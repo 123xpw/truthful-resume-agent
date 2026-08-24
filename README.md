@@ -2,41 +2,31 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
-An evidence-grounded CLI for understanding a job description, retrieving
-relevant experience, and producing a review-gated resume draft.
+[![CI](https://github.com/123xpw/truthful-resume-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/123xpw/truthful-resume-agent/actions/workflows/ci.yml)
 
-It is not a generic "make my resume sound stronger" generator. Most AI
-resume tools help you polish claims; this one works the other way. The fact
-bank is the single source of truth, the LLM is forbidden from writing resume
-wording, and every sentence is manually confirmed and traceable to a source
-fact. The system separates three questions:
+**An evidence-grounded local workflow for turning a job description into a
+defensible, traceable resume.**
 
-1. What does this JD require?
-2. Which recorded experiences support those requirements?
-3. Which exact wording is defensible, and which eligible items should the agent select for this JD and page budget?
+DeepSeek may interpret the JD, rank already-authorized material, and suggest
+revisions. Deterministic checks protect the facts and delivery path; the
+candidate remains the only wording authority.
 
-[Live desensitized JD Insight demo](https://123xpw.github.io/truthful-resume-agent/)
+> **Current maturity:** the CLI is an independently usable local MVP. The Web
+> UI is a diagnostics dashboard, not yet a complete replacement for the CLI.
+> The system intentionally cannot approve resume claims on the candidate's
+> behalf.
 
-![Desensitized JD Insight report](docs/assets/jd-insight-demo.png)
+## The Control Model
 
-## What It Does
+| AI advises | Code constrains | Candidate authorizes |
+| --- | --- | --- |
+| Interpret the JD, surface red flags, suggest review-only wording, rank eligible fragment IDs | Validate sources, block unsupported terms, enforce hashes, restrict selection, audit provenance | Approve exact A/B wording, confirm manual bullet provenance, decide whether to submit |
 
-- Parses public JD text into responsibilities, hard requirements, and bonus items.
-- Matches a structured fact bank with keyword search and optional Qdrant vector retrieval.
-- Blocks unsupported technologies until the fact bank contains evidence for them.
-- Shows the exact core and conservative resume wording before confirmation.
-- Rejects pending or hand-edited decisions during resume generation.
-- Produces Markdown/HTML reports and a LaTeX resume draft.
-- Records observed application outcomes against the generated PDF hash.
-- Ships a LangChain + LangGraph conversational agent with tool calling,
-  a retrieve → generate → verify → reflect loop, and short-term (checkpoint)
-  plus long-term (JSON) memory.
+The project deliberately separates evidence, wording authorization, JD fit,
+and delivery. No prompt is allowed to collapse those decisions into one model
+response.
 
-The optional LLM path helps explain the JD and generate review-only interview
-questions or wording candidates. LLM output cannot update facts, confirmation
-records, or resume files.
-
-## Five-Minute Start
+## Five-Minute Start — No API Key
 
 Requirements: Python 3.11+.
 
@@ -45,74 +35,162 @@ git clone https://github.com/123xpw/truthful-resume-agent.git
 cd truthful-resume-agent
 python3 -m venv .venv
 .venv/bin/python -m pip install -r requirements.txt
-```
 
-Run the public sample without an API key:
-
-```bash
 .venv/bin/python backend/run_cli.py validate
-.venv/bin/python backend/run_cli.py analyze \
-  --file data/sample_jds/alibaba_ai_agent_engineer.md \
-  --name demo_alibaba
 .venv/bin/python backend/run_cli.py explain-jd \
   --file data/sample_jds/alibaba_ai_agent_engineer.md \
   --no-llm --write
 ```
 
-The report is written to:
+A clean clone automatically falls back to `*.example.json`; neither private
+data nor an API key is required. The desensitized report is written to
+`data/outputs/alibaba_ai_agent_engineer/jd_insight.html`.
 
-```text
-data/outputs/alibaba_ai_agent_engineer/jd_insight.html
+> **Demo:** [open the published JD Insight artifact](https://123xpw.github.io/truthful-resume-agent/)
+> to inspect deterministic fact matches and unsupported-term guardrails. It
+> demonstrates one analysis output, not the entire workflow.
+
+## How It Works
+
+```mermaid
+%%{init: {"theme":"base","flowchart":{"curve":"linear","nodeSpacing":34,"rankSpacing":46},"themeVariables":{"fontFamily":"Inter, ui-sans-serif, system-ui, sans-serif","fontSize":"16px","lineColor":"#285EA8","primaryTextColor":"#102A43"}}}%%
+flowchart TB
+    subgraph EVIDENCE["1 · Evidence inputs"]
+        direction LR
+        JD["Target job description"]
+        FB[("Private fact bank<br/>single source of truth")]
+    end
+
+    subgraph REVIEW["2 · Deterministic preparation and optional advice"]
+        direction LR
+        CORE["Prepare, match, and check boundaries<br/>unsupported terms fail closed"]
+        SHEET["Review sheet<br/>evidence · risks · wording options"]
+        LLM["Optional DeepSeek advisor<br/>interpret JD · suggest wording · rank eligible IDs"]
+        CORE --> SHEET
+        CORE -. controlled context .-> LLM
+        LLM -. suggestions only .-> SHEET
+    end
+
+    AUTH["3 · Candidate authorization<br/>A core · B conservative · C omit · D correct fact"]
+
+    subgraph DELIVERY["4 · Restricted selection and audited delivery"]
+        direction LR
+        SELECT["Eligible pool + restricted selection<br/>deterministic by default"]
+        TEX["Pipeline-generated<br/>actual TeX"]
+        HAND["Hand-edited<br/>actual TeX"]
+        AUDIT["AEO on actual TeX<br/>+ provenance registration"]
+        OUT["Canonical delivery record<br/>TeX/PDF SHA256 · never auto-submitted"]
+        BLOCK["Blocked<br/>untraced bullet · stale authorization · unknown fact ID"]
+        SELECT --> TEX
+        TEX --> AUDIT
+        HAND --> AUDIT
+        AUDIT -->|pass| OUT
+        AUDIT -->|fail closed| BLOCK
+    end
+
+    JD --> CORE
+    FB --> CORE
+    SHEET --> AUTH
+    AUTH -->|A/B-authorized wording only| SELECT
+
+    classDef trust fill:#EEF5FF,stroke:#285EA8,color:#102A43,stroke-width:2px;
+    classDef advisory fill:#FFF4E8,stroke:#E66A18,color:#7C3508,stroke-width:2px,stroke-dasharray:6 4;
+    classDef human fill:#ECF8EF,stroke:#2D7A49,color:#174B2B,stroke-width:3px;
+    classDef audit fill:#F4EEFB,stroke:#7047B8,color:#402477,stroke-width:2px;
+    classDef success fill:#ECF8EF,stroke:#2D7A49,color:#174B2B,stroke-width:2px;
+    classDef blocked fill:#FFF0F0,stroke:#D12D2D,color:#8F1D1D,stroke-width:2px;
+    class JD,FB,CORE,SHEET,SELECT,TEX trust;
+    class LLM advisory;
+    class AUTH human;
+    class HAND,AUDIT audit;
+    class OUT success;
+    class BLOCK blocked;
+    style EVIDENCE fill:#F8FAFC,stroke:#C7D4E5,stroke-width:1px
+    style REVIEW fill:#FBFCFE,stroke:#C7D4E5,stroke-width:1px
+    style DELIVERY fill:#FBFCFE,stroke:#C7D4E5,stroke-width:1px
+    linkStyle default stroke:#285EA8,stroke-width:2px;
 ```
 
-The clean clone automatically uses desensitized `*.example.json` data. No
-private profile or API key is needed for this path.
+There are two supported delivery routes:
 
-## Full Resume Workflow
+- **Pipeline-generated resume:** `prepare -> authorize -> finalize -> deliver`.
+- **Hand-edited canonical resume:** run `aeo-review`, then
+  `register-canonical` against the actual TeX and PDF. Every professional bullet
+  must match a current authorization or have candidate-confirmed provenance.
+
+## What Works Today
+
+- **Evidence control:** structured private facts, explicit boundaries,
+  source-linked A/B wording, unsupported-term blocking, and keyword retrieval
+  with optional semantic recall.
+- **Authorization control:** content-bound decisions are reused only while the
+  wording remains unchanged; stale facts or bullets return to pending.
+- **Selection and delivery:** the full authorized inventory is considered,
+  capacity and omission reasons remain explicit, and every delivered
+  professional bullet must pass provenance checks.
+- **Analysis and learning:** AEO review, a read-only LangGraph fact Q&A Agent,
+  application outcomes, interview feedback, mastery history, and cross-JD gap
+  trends.
+
+## Full Delivery Workflow
+
+### 1. Prepare, authorize, and finalize
 
 ```bash
 .venv/bin/python backend/run_cli.py prepare \
   --file data/sample_jds/tencent_ai_application.md \
   --name demo_tencent
 
-.venv/bin/python backend/run_cli.py decide --name demo_tencent
-.venv/bin/python backend/run_cli.py finalize --name demo_tencent --llm-select
+# Requires a real interactive terminal. Only new or changed wording is asked.
+.venv/bin/python backend/run_cli.py authorize --name demo_tencent
+
+# Deterministic selection is the default and needs no LLM key.
+.venv/bin/python backend/run_cli.py finalize --name demo_tencent
 .venv/bin/python backend/run_cli.py status --name demo_tencent
 ```
 
-`decide` is a one-time resume-wording authorization step, not an interview
-readiness test. Each new or changed experience shows two complete alternatives:
+`authorize` shows complete wording alternatives:
 
-- `A`: the core wording is factually accurate; authorize it for resumes.
-- `B`: only the conservative wording is accurate; authorize that version.
-- `C`: the fact is broadly accurate, but keep it off resumes for now.
-- `D`: the underlying fact needs correction.
+| Choice | Meaning | Eligible for selection |
+| --- | --- | :---: |
+| `A` | Authorize the core wording | Yes |
+| `B` | Authorize only the conservative wording | Yes |
+| `C` | Keep the fact off resumes for now | No |
+| `D` | Correct the underlying fact | No |
 
-A/B confirms factual accuracy and permission to use the wording, not editorial selection.
-`finalize` selects at most three internships and two projects and writes
-`selection_plan.md`. With `--llm-select`, the model may return only existing
-fragment IDs; unknown, duplicate, wrong-section, or over-capacity IDs fail
-closed, and model prose never enters the resume.
+The legacy command name `decide` remains an alias. A/B grants permission to use
+the exact wording; it does not force that experience into every resume.
 
-The authorization is stored locally in `data/resume_authorizations.json` and
-reused across applications when the exact fact and fragment content hash is
-unchanged. A new JD therefore normally skips `decide` for wording already
-authorized. If a fact or bullet changes, only the affected item becomes pending
-again. Interview preparation and free-text notes remain optional.
+Use `finalize --llm-select` only after configuring an LLM. The model can return
+existing eligible fragment IDs, but unknown, duplicate, wrong-section, or
+over-capacity IDs fail closed. Model prose never enters the generated resume.
 
-`decide` requires a TTY and rejects piped stdin. This is a friction barrier,
-not cryptographic proof that a human typed the answer. Resume generation also
-checks for pending decisions, interactive confirmation markers, and stale
-artifacts. If the JD, fact bank, or resume fragments change after review,
-`prepare` rebuilds the review, automatically reapplies unchanged content-hash
-authorizations, and asks only about new or changed wording.
+### 2. Audit the artifact that will actually be sent
 
-To compile the generated TeX, install XeLaTeX/latexmk or Tectonic. When only
-Tectonic is available, run the command printed by `finalize`.
+For a generated or manually edited TeX resume:
 
-## Use Your Own Data
+```bash
+.venv/bin/python backend/run_cli.py aeo-review \
+  --name demo_tencent \
+  --resume data/outputs/demo_tencent/resume_draft.tex \
+  --no-llm --write
 
-Copy the public examples to private runtime files:
+.venv/bin/python backend/run_cli.py register-canonical \
+  --name demo_tencent \
+  --tex data/outputs/demo_tencent/resume_draft.tex \
+  --pdf data/outputs/demo_tencent/resume_draft.pdf
+```
+
+`register-canonical` blocks delivery when a professional bullet lacks a current
+authorized fragment or candidate-confirmed manual provenance. It records both
+the TeX and actual PDF SHA256 hashes when ready.
+
+## Configuration
+
+<details>
+<summary><strong>Use private data</strong></summary>
+
+Copy the ignored private-runtime files from the public examples:
 
 ```bash
 cp data/facts/facts.example.json data/facts/facts.json
@@ -120,33 +198,22 @@ cp data/resume_fragments/fragments.example.json data/resume_fragments/fragments.
 cp data/profile/profile.example.json data/profile/profile.private.json
 ```
 
-Then edit the private copies. They are excluded by `.gitignore`.
+Edit only the private copies; they are excluded by `.gitignore`. Each fact
+needs a stable ID, factual summary, retrieval keywords, explicit boundaries,
+and a risk level. Each fragment cites one or more `source_fact_ids` and contains
+complete A/B wording.
 
-Each fact should contain:
+</details>
 
-- a stable `id`
-- a factual summary
-- retrieval keywords
-- explicit boundaries
-- a risk level
+<details>
+<summary><strong>Enable optional DeepSeek assistance</strong></summary>
 
-Each resume fragment cites one or more `source_fact_ids` and contains complete
-`A` and `B` bullet sets. Run validation after editing:
-
-```bash
-.venv/bin/python backend/run_cli.py validate
-```
-
-## Optional LLM Configuration
-
-The client uses an OpenAI-compatible chat-completions endpoint. DeepSeek is the
-default, but URL and model are configurable.
+The LLM client uses an OpenAI-compatible Chat Completions endpoint. DeepSeek is
+the default; the URL and model remain configurable.
 
 ```bash
 cp .env.example .env
 ```
-
-Set these values in `.env`:
 
 ```dotenv
 RESUME_AGENT_LLM_API_KEY=your-key
@@ -154,115 +221,107 @@ RESUME_AGENT_LLM_API_URL=https://api.deepseek.com/chat/completions
 RESUME_AGENT_LLM_MODEL=deepseek-chat
 ```
 
-API keys are never included in generated reports and `.env` is ignored.
+LLM output is advisory. It may help revise the resume, but it cannot update
+facts, authorization records, provenance confirmations, or delivered files.
+`.env` is ignored and API keys are not written into reports.
 
-## Architecture
+</details>
 
-```text
-Public JD
-   |
-   +--> deterministic requirement extraction
-   |
-   +--> keyword matcher
-   |       |
-   |       +--> unsupported-term evidence gate
-   |
-   +--> optional fastembed + embedded Qdrant candidates
-           |
-           +--> candidate review only
+> **Data boundary:** enabling an LLM may send the JD, retrieved fact summaries
+and boundaries, chat content, or resume text to the configured provider. The
+tool does not automatically redact those inputs. Use `--no-llm` and the default
+deterministic selector when the data must stay fully local.
 
-Matched fact IDs
-   --> source-linked A/B fragments
-   --> candidate truth/explainability confirmation
-   --> restricted 3-internship/3-project selection plan
-   --> included/omitted report
-   --> stale/pending/confirmation checks
-   --> LaTeX resume draft
-```
+## Evaluation
 
-Trusted resume wording remains deterministic and source-linked. Optional LLM
-selection ranks only confirmed fragment IDs and cannot generate or rewrite a
-resume sentence. Experimental LLM wording remains review-only.
+The matcher report is based on a complete 4-JD x 11-fact audit matrix:
 
-## Evaluated Retrieval, Not a Vector-Database Claim
+| Matcher | Macro useful recall | Macro useful precision | Decision |
+| --- | ---: | ---: | --- |
+| Keyword | 80% | 64% | Conservative default |
+| Semantic | 88% | 56% | Optional recall path |
 
-The repository includes an attributed audit baseline in
-`data/evaluation/matcher_labels.json` and a generated comparison report in
-`data/evaluation/matcher_report.md`.
+Semantic retrieval improves recall but reduces precision and selects one
+irrelevant fact in the data-role sample. It therefore remains opt-in and never
+decides which experience exists. See
+[`data/evaluation/matcher_report.md`](data/evaluation/matcher_report.md).
 
-Current result: semantic retrieval did not improve useful-fact recall across
-the four sample JDs and selected one irrelevant fact for the data-role sample.
-Qdrant therefore remains an auxiliary recall path rather than the automatic
-resume selector. This limitation is intentional and visible.
+`rag_eval` is a five-query sanity check, not a production-quality benchmark and
+not a resume claim.
 
-Re-run the evaluation:
+<details>
+<summary><strong>Run the evaluation commands</strong></summary>
 
 ```bash
 .venv/bin/python -m backend.resume_agent.eval_matchers
-.venv/bin/python -m backend.resume_agent.rag_eval   # Recall@K and MRR
+.venv/bin/python -m backend.resume_agent.rag_eval
 ```
 
-## Main Commands
+</details>
 
-| Command | Purpose |
+## Command Reference
+
+| Stage | Commands |
 | --- | --- |
-| `validate` | Validate facts, fragments, profile, and source links |
-| `analyze` | Match a JD and write a deterministic report |
-| `explain-jd` | Generate the checkable JD Insight Markdown/HTML report |
-| `prepare` | Save a JD and create its report/review sheet |
-| `decide` | Confirm the truthfulness/explainability boundary of exact A/B wording |
-| `finalize` | Write a selection report and generate TeX; optional `--llm-select` |
-| `status` / `list` | Show pending, stale, draft, and export-ready states |
-| `gaps` / `expand-review` | Inspect missing resume coverage without auto-promoting facts |
-| `gap-check` | Warn about missing evidence for a single JD (terminal + HTML) |
-| `career-trends` | Aggregate missing-tech gaps across JDs and flag repeated ones |
-| `record-outcome` | Record an observed application state and PDF hash |
-| `record-interview` | Record interview feedback and optionally append to fact boundaries |
-| `list-interview` | List recorded interview feedback for an application |
-| `mastery-history` | Show mastery progression (C->B->A) across decide snapshots |
+| Understand | `analyze`, `explain-jd`, `gap-check`, `career-trends` |
+| Authorize | `prepare`, `authorize`, `expand-review` |
+| Generate | `finalize`, `status`, `list`, `deliver` |
+| Audit | `aeo-review`, `register-canonical` |
+| Learn from outcomes | `record-outcome`, `record-interview`, `list-interview`, `mastery-history` |
 
-Run `python3 backend/run_cli.py --help` for all options.
+Run `.venv/bin/python backend/run_cli.py --help` for every option.
 
-## Privacy Model
+## Verification and Privacy
 
-The public repository contains only desensitized examples and public sample
-JDs. These runtime paths are intentionally ignored:
-
-- `data/facts/facts.json`
-- `data/resume_fragments/fragments.json`
-- `data/profile/profile.private.json`
-- `data/jd_library/`
-- `data/outputs/`
-- `data/semantic_index/`
-- `data/application_outcomes.json`
-- `.env`
-
-Do not publish an existing personal repository history merely after adding
-`.gitignore`; old commits may still contain removed private files. Create a
-clean public history, as this repository does.
-
-## Verification
+<details>
+<summary><strong>Run the verification suite</strong></summary>
 
 ```bash
 .venv/bin/python backend/run_cli.py validate
 .venv/bin/python -m backend.resume_agent.smoke_test
+.venv/bin/python -m backend.resume_agent.agent.test_agent
 .venv/bin/python -m backend.resume_agent.eval_matchers
+.venv/bin/pip check
 ```
 
-The smoke suite covers pending-review rejection, TTY gating, EOF recovery,
-composite facts, stale review/artifact detection, semantic-candidate isolation,
-unsupported-term blocking, outcome hashes, and delivery gates.
+</details>
 
-Design details and tradeoffs are in `docs/technical_design.md`,
-`docs/risk_policy.md`, and `docs/evaluation_plan.md`.
+The smoke suite runs with both private-runtime filenames and public
+`*.example.json` fallback data. It covers pending/stale review rejection, TTY
+gating, content-bound authorization reuse, matcher-independent inventory,
+unsupported-term blocking, canonical provenance, actual PDF hashes, Web import,
+and Agent verifier failure paths.
 
-## Web UI (Optional)
+The public repository contains only desensitized examples and public sample
+JDs. Private facts, fragments, profile, JD library, outputs, vector index,
+authorizations, outcomes, memory, and `.env` are ignored. A clean public Git
+history is still required because `.gitignore` cannot remove secrets from old
+commits.
 
-A FastAPI web interface wraps the CLI capabilities into a single-page UI:
+## Known Limitations
+
+- This is a local, single-user workflow without authentication, multi-user
+  serving, production monitoring, or transactional database guarantees.
+- `aeo-review` currently reads TeX source, not text extracted from the final
+  PDF. `register-canonical` hashes the PDF but does not validate ATS extraction
+  order or layout readability.
+- The TTY requirement is a friction barrier, not cryptographic proof that a
+  human supplied the authorization.
+- The Agent verifier is an LLM judgment over an evidence bundle, not formal
+  entailment proof; malformed verifier output fails closed.
+- Retrieval metrics come from a small, attributed 4-JD x 11-fact matrix and
+  should not be generalized as a production benchmark.
+
+## Web UI and Documentation
 
 ```bash
 .venv/bin/uvicorn backend.resume_agent.web.app:app --reload
 ```
 
-Open http://127.0.0.1:8000 for JD analysis, application list, gap trends,
-mastery timeline, and interview feedback recording.
+Open <http://127.0.0.1:8000> for JD analysis, application status, gap trends,
+mastery history, and interview feedback. Authorization, finalization, AEO, and
+canonical registration remain CLI operations in the current MVP.
+
+Design details are in [`docs/technical_design.md`](docs/technical_design.md),
+[`docs/risk_policy.md`](docs/risk_policy.md), and
+[`docs/evaluation_plan.md`](docs/evaluation_plan.md).

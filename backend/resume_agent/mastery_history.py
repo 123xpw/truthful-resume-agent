@@ -11,6 +11,7 @@ import json
 from pathlib import Path
 
 from .review_parser import parse_review_mastery
+from .io_utils import atomic_write_text
 
 
 @dataclass(frozen=True)
@@ -71,11 +72,12 @@ def record_mastery_snapshot(
     )
     path = history_path(project_root)
     history = load_mastery_history(project_root)
+    if history and history[-1].application == application and history[-1].mastery == snapshot.mastery:
+        return history[-1]
     history.append(snapshot)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
+    atomic_write_text(
+        path,
         json.dumps([asdict(item) for item in history], ensure_ascii=False, indent=2),
-        encoding="utf-8",
     )
     return snapshot
 

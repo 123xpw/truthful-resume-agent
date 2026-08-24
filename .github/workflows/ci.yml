@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-public-clone:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
+      - name: Validate public example data
+        run: python backend/run_cli.py validate
+
+      - name: Run end-to-end smoke suite
+        run: python -m backend.resume_agent.smoke_test
+
+      - name: Run conversational Agent tests
+        run: python -m backend.resume_agent.agent.test_agent
+
+      - name: Rebuild matcher evaluation
+        run: python -m backend.resume_agent.eval_matchers --output /tmp/matcher_report.md
+
+      - name: Run retrieval sanity check
+        run: python -m backend.resume_agent.rag_eval
+
+      - name: Check installed dependencies
+        run: python -m pip check
