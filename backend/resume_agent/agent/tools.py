@@ -6,6 +6,7 @@ import json
 
 from langchain_core.tools import tool
 
+from ..analyzer import contains_keyword
 from ..fact_store import load_facts
 
 
@@ -19,8 +20,13 @@ def search_facts(query: str) -> str:
     for fact in facts:
         haystack = f"{fact.id} {fact.title} {fact.summary} {' '.join(fact.keywords)}".lower()
         keyword_hits = sum(1 for keyword in fact.keywords if keyword.lower() in normalized_query)
-        score = keyword_hits * 3 + sum(1 for token in tokens if token in haystack)
-        if score > 0:
+        token_hits = sum(1 for token in tokens if len(token) >= 2 and contains_keyword(haystack, token))
+        score = keyword_hits * 3 + token_hits
+        # A registered keyword is strong enough by itself. Free query tokens
+        # need at least two boundary-aware hits so generic words such as
+        # "implementation" do not surface unrelated facts; this also prevents
+        # substring errors such as production -> reproduction.
+        if keyword_hits > 0 or token_hits >= 2:
             scored.append((score, fact))
     scored.sort(key=lambda item: -item[0])
     payload = {

@@ -4,15 +4,24 @@ from __future__ import annotations
 
 import json
 import re
-from typing import Annotated, TypedDict
+from typing import Annotated, Callable, TypedDict
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from langchain_openai import ChatOpenAI
+from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 
-from ..llm_client import get_api_key, get_api_url, get_model
+from ..llm_client import (
+    LLMNotConfigured,
+    LLMServiceError,
+    call_with_retry,
+    get_api_key,
+    get_api_url,
+    get_model,
+    get_timeout_seconds,
+)
 from . import memory, prompts
 from .tools import search_facts, verify_fact
 
@@ -27,6 +36,10 @@ class AgentState(TypedDict, total=False):
     verification_feedback: str
     verify_pass: bool
     turn: int
+    degraded: bool
+    error_code: str
+    error_message: str
+    error_retryable: bool
 
 
 _llm: ChatOpenAI | None = None
@@ -40,30 +53,72 @@ def _get_llm() -> ChatOpenAI:
             api_key=get_api_key(),
             base_url=get_api_url().removesuffix("/chat/completions"),
             temperature=0.2,
+            timeout=get_timeout_seconds(),
+            max_retries=0,
         )
     return _llm
 
 
-def _execute_tool_calls(resp: AIMessage) -> tuple[list[ToolMessage], list[str], set[str]]:
+def _llm_error(exc: Exception) -> dict:
+    if isinstance(exc, LLMNotConfigured):
+        return {
+            "error_code": "LLM_NOT_CONFIGURED",
+            "error_message": "LLM API key is not configured.",
+            "error_retryable": False,
+        }
+    if isinstance(exc, LLMServiceError):
+        return {
+            "error_code": exc.code,
+            "error_message": str(exc),
+            "error_retryable": exc.retryable,
+        }
+    return {
+        "error_code": "AGENT_NODE_FAILED",
+        "error_message": "Agent node failed.",
+        "error_retryable": False,
+    }
+
+
+def _invoke_llm(llm, messages: list) -> AIMessage:
+    return call_with_retry(lambda: llm.invoke(messages))
+
+
+def _execute_tool_calls(
+    resp: AIMessage,
+) -> tuple[list[ToolMessage], list[str], set[str], dict | None]:
     """执行 LLM 工具调用，同时保留供 verifier 使用的原始证据。"""
     results: list[ToolMessage] = []
     evidence: list[str] = []
     called_tools: set[str] = set()
+    error: dict | None = None
     for call in resp.tool_calls:
         name = call.get("name") if isinstance(call, dict) else call.name
         args = call.get("args", {}) if isinstance(call, dict) else call.args
         call_id = call.get("id") if isinstance(call, dict) else call.id
         called_tools.add(name)
-        if name == "search_facts":
-            content = str(search_facts.invoke(args))
-        elif name == "verify_fact":
-            content = str(verify_fact.invoke(args))
-        else:
-            content = f"未知工具 {name}"
+        try:
+            if name == "search_facts":
+                content = str(search_facts.invoke(args))
+            elif name == "verify_fact":
+                content = str(verify_fact.invoke(args))
+            else:
+                content = json.dumps({"error": "unknown_tool", "tool": str(name)})
+                error = {
+                    "error_code": "UNKNOWN_TOOL",
+                    "error_message": "Agent requested an unknown tool.",
+                    "error_retryable": False,
+                }
+        except Exception:
+            content = json.dumps({"error": "tool_unavailable", "tool": str(name)})
+            error = {
+                "error_code": "FACT_TOOL_UNAVAILABLE",
+                "error_message": "Fact tool is unavailable; generation was blocked.",
+                "error_retryable": True,
+            }
         results.append(ToolMessage(content=content, tool_call_id=call_id))
-        if name in {"search_facts", "verify_fact"}:
+        if name in {"search_facts", "verify_fact"} and error is None:
             evidence.append(content)
-    return results, evidence, called_tools
+    return results, evidence, called_tools, error
 
 
 def _latest_user_query(messages: list) -> str:
@@ -113,15 +168,31 @@ def _parse_verifier_response(content: str) -> tuple[bool, str]:
     return status == "PASS", feedback
 
 
-def _retrieve(state: AgentState) -> dict:
-    llm = _get_llm().bind_tools([search_facts, verify_fact])
+def _retrieve(state: AgentState, llm_provider: Callable = _get_llm) -> dict:
+    try:
+        llm = llm_provider().bind_tools([search_facts, verify_fact])
+    except Exception as exc:
+        return _llm_error(exc)
     messages = [SystemMessage(prompts.SYSTEM_PROMPT + "\n" + prompts.RETRIEVE_INSTRUCTION), *state["messages"]]
-    resp = llm.invoke(messages)
-    tool_messages, evidence, called_tools = _execute_tool_calls(resp)
+    try:
+        resp = _invoke_llm(llm, messages)
+    except Exception as exc:
+        return _llm_error(exc)
+    tool_messages, evidence, called_tools, tool_error = _execute_tool_calls(resp)
+    if tool_error is not None:
+        return {"messages": [resp, *tool_messages], **tool_error}
     if "search_facts" not in called_tools:
         # Tool choice is not trusted as a safety boundary. Always obtain an
         # evidence bundle even when the model skips the requested tool call.
-        evidence.append(str(search_facts.invoke({"query": _latest_user_query(state["messages"])})))
+        try:
+            evidence.append(str(search_facts.invoke({"query": _latest_user_query(state["messages"])})))
+        except Exception:
+            return {
+                "messages": [resp, *tool_messages],
+                "error_code": "FACT_TOOL_UNAVAILABLE",
+                "error_message": "Fact tool is unavailable; generation was blocked.",
+                "error_retryable": True,
+            }
     return {
         "messages": [resp, *tool_messages],
         "evidence": "\n".join(evidence),
@@ -129,8 +200,11 @@ def _retrieve(state: AgentState) -> dict:
     }
 
 
-def _generate(state: AgentState) -> dict:
-    llm = _get_llm()
+def _generate(state: AgentState, llm_provider: Callable = _get_llm) -> dict:
+    try:
+        llm = llm_provider()
+    except Exception as exc:
+        return _llm_error(exc)
     prefs = memory.list_preferences()
     prefs_text = f"\n\n用户的长期偏好（跨会话记忆）：{prefs}" if prefs else ""
     evidence = state.get("evidence", "") or '{"matches":[],"message":"事实库中没有相关证据。"}'
@@ -145,12 +219,18 @@ def _generate(state: AgentState) -> dict:
         + f"\n\n本轮唯一允许使用的事实证据包：\n{evidence}"
     )
     messages = [SystemMessage(system), *state["messages"]]
-    resp = llm.invoke(messages)
+    try:
+        resp = _invoke_llm(llm, messages)
+    except Exception as exc:
+        return _llm_error(exc)
     return {"messages": [resp], "draft": str(resp.content)}
 
 
-def _verify(state: AgentState) -> dict:
-    llm = _get_llm()
+def _verify(state: AgentState, llm_provider: Callable = _get_llm) -> dict:
+    try:
+        llm = llm_provider()
+    except Exception as exc:
+        return _llm_error(exc)
     messages = [
         SystemMessage(prompts.SYSTEM_PROMPT + "\n" + prompts.VERIFY_INSTRUCTION),
         HumanMessage(
@@ -162,7 +242,10 @@ def _verify(state: AgentState) -> dict:
             + state.get("draft", "")
         ),
     ]
-    resp = llm.invoke(messages)
+    try:
+        resp = _invoke_llm(llm, messages)
+    except Exception as exc:
+        return _llm_error(exc)
     verify_pass, feedback = _parse_verifier_response(str(resp.content))
     return {
         "verify_pass": verify_pass,
@@ -171,8 +254,11 @@ def _verify(state: AgentState) -> dict:
     }
 
 
-def _reflect(state: AgentState) -> dict:
-    llm = _get_llm()
+def _reflect(state: AgentState, llm_provider: Callable = _get_llm) -> dict:
+    try:
+        llm = llm_provider()
+    except Exception as exc:
+        return _llm_error(exc)
     messages = [
         SystemMessage(prompts.SYSTEM_PROMPT + "\n" + prompts.REFLECT_INSTRUCTION),
         HumanMessage(
@@ -184,11 +270,20 @@ def _reflect(state: AgentState) -> dict:
             + (state.get("evidence", "") or "<empty>")
         ),
     ]
-    resp = llm.invoke(messages)
+    try:
+        resp = _invoke_llm(llm, messages)
+    except Exception as exc:
+        return _llm_error(exc)
     return {"turn": state.get("turn", 0) + 1, "messages": [resp]}
 
 
+def _route_after_step(state: AgentState) -> str:
+    return "end" if state.get("error_code") else "continue"
+
+
 def _route_after_verify(state: AgentState) -> str:
+    if state.get("error_code"):
+        return "end"
     if state.get("verify_pass"):
         return "end"
     if state.get("turn", 0) < MAX_TURNS:
@@ -196,16 +291,20 @@ def _route_after_verify(state: AgentState) -> str:
     return "end"
 
 
-def build_agent():
+def build_agent(
+    checkpointer: BaseCheckpointSaver | None = None,
+    llm=None,
+):
     """构建并编译 Agent 图（含短期记忆 checkpoint）。"""
+    llm_provider = (lambda: llm) if llm is not None else _get_llm
     graph = StateGraph(AgentState)
-    graph.add_node("retrieve", _retrieve)
-    graph.add_node("generate", _generate)
-    graph.add_node("verify", _verify)
-    graph.add_node("reflect", _reflect)
+    graph.add_node("retrieve", lambda state: _retrieve(state, llm_provider))
+    graph.add_node("generate", lambda state: _generate(state, llm_provider))
+    graph.add_node("verify", lambda state: _verify(state, llm_provider))
+    graph.add_node("reflect", lambda state: _reflect(state, llm_provider))
     graph.add_edge(START, "retrieve")
-    graph.add_edge("retrieve", "generate")
-    graph.add_edge("generate", "verify")
+    graph.add_conditional_edges("retrieve", _route_after_step, {"continue": "generate", "end": END})
+    graph.add_conditional_edges("generate", _route_after_step, {"continue": "verify", "end": END})
     graph.add_conditional_edges("verify", _route_after_verify, {"end": END, "reflect": "reflect"})
-    graph.add_edge("reflect", "retrieve")
-    return graph.compile(checkpointer=MemorySaver())
+    graph.add_conditional_edges("reflect", _route_after_step, {"continue": "retrieve", "end": END})
+    return graph.compile(checkpointer=checkpointer or MemorySaver())

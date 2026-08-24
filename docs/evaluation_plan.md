@@ -97,6 +97,39 @@ Metrics:
   sanity check pass in a clean clone containing only `*.example.json` data.
 - CI uses no private profile, facts, fragments, JD library, or API key.
 
+### 7. Agent Runtime Reliability
+
+Question: Does the service preserve boundaries when state or dependencies fail?
+
+Metrics:
+
+- Conversation isolation across distinct UUID/thread IDs.
+- Checkpoint recovery after a runtime restart.
+- Bounded retry count for transient provider errors.
+- Fail-closed behavior when fact tools are unavailable.
+- Complete node sequence in the sanitized trace.
+- Raw-message leakage count in trace storage: zero.
+
+The deterministic Agent regression set contains 24 fixed scenarios covering
+supported facts, unsupported queries, one-pass and repair-pass verification,
+malformed verifier output, and retry exhaustion. Provider behavior is faked in
+CI so this suite is reproducible and does not consume an API key.
+
+### 8. Retrieval Regression
+
+The fixed retrieval set runs the same 10 queries through:
+
+- `keyword_search` as the conservative baseline.
+- the actual embedded-Qdrant `semantic_search` / `query_points` path.
+
+Current public-example baseline:
+
+- Keyword Recall@5 / MRR: 0.50 / 0.50.
+- Qdrant semantic Recall@5 / MRR: 1.00 / 0.80.
+
+CI fails if Qdrant semantic Recall@5 drops below 0.90 or MRR drops below 0.60.
+This small set detects regressions; it is not a production benchmark.
+
 ## Test Set
 
 The audited matcher set uses the four public sample files:
@@ -136,3 +169,7 @@ The system fails if it:
 - Registers a hand-edited canonical resume whose professional bullets have no
   current authorization or candidate-confirmed provenance.
 - Passes locally only because private ignored files happen to exist.
+- Shares short-term messages between different conversation IDs.
+- Continues generation after the fact tool fails.
+- Silently falls back from semantic retrieval without a degraded marker.
+- Stores raw private message, JD, or resume text in structured trace metadata.

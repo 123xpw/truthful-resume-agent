@@ -78,3 +78,19 @@ chat content, or resume text to the configured provider. The MVP does not
 automatically redact those inputs. Use `--no-llm` and deterministic selection
 when data must stay fully local. Provider output is advisory and cannot update
 facts, authorizations, provenance confirmations, or delivered artifacts.
+
+## Agent Service Failure Boundary
+
+- Conversation IDs isolate checkpoint state but are not authentication.
+- Fact-store/tool failure must block generation; empty evidence is not a
+  substitute for an available evidence source.
+- Semantic retrieval may fall back to deterministic keyword retrieval only
+  when the response explicitly reports degraded operation.
+- Only transient LLM failures may retry, with a bounded attempt count.
+- Raw chat, JD, resume text, provider bodies, and API keys must not be stored in
+  structured trace metadata.
+- SQLite checkpoints necessarily retain conversation state and evidence for
+  resume-after-restart behavior; the runtime database is private and must not
+  be committed or treated as a sanitized trace export.
+- A verifier-exhausted draft is `blocked`, not verified, and remains outside
+  authorization and delivery paths.

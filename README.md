@@ -133,6 +133,38 @@ There are two supported delivery routes:
   application outcomes, interview feedback, mastery history, and cross-JD gap
   trends.
 
+## Read-only Agent API
+
+FastAPI exposes the fact Q&A Agent without granting it fact, authorization, or
+delivery writes:
+
+```bash
+.venv/bin/uvicorn backend.resume_agent.web.app:app --reload
+
+curl -X POST http://127.0.0.1:8000/api/v1/conversations
+curl -X POST http://127.0.0.1:8000/api/v1/conversations/CONVERSATION_ID/messages \
+  -H 'Content-Type: application/json' \
+  -d '{"message":"Which facts support Python API work?"}'
+```
+
+Each response returns a `trace_id`, verification status, and the LangGraph
+nodes traversed. Conversation state is isolated by UUID and persisted in a
+local SQLite checkpointer; node traces store IDs, timing, status, and evidence
+fact IDs, never raw chat, JD, or resume text. Checkpoint tables do contain the
+messages and retrieved evidence needed to resume a conversation, so the whole
+runtime database must be handled as private data.
+
+| Failure | Behavior |
+| --- | --- |
+| LLM timeout, 429, or provider 5xx | At most two bounded retries, then a structured 503/504 error |
+| Missing or rejected LLM credentials | Immediate structured 503; deterministic CLI features remain available |
+| Fact tool failure | Fail closed before generation |
+| Semantic retrieval failure in `/api/analyze` | Explicit keyword fallback with `degraded=true`, unless fallback is disabled |
+| Verifier failure after three reflections | HTTP 200 with `status=blocked`; the draft is not presented as verified |
+
+This remains a local single-user API. A conversation ID separates state but is
+not authentication or authorization.
+
 ## Full Delivery Workflow
 
 ### 1. Prepare, authorize, and finalize
@@ -220,6 +252,16 @@ cp .env.example .env
 RESUME_AGENT_LLM_API_KEY=your-key
 RESUME_AGENT_LLM_API_URL=https://api.deepseek.com/chat/completions
 RESUME_AGENT_LLM_MODEL=deepseek-chat
+RESUME_AGENT_LLM_TIMEOUT_SECONDS=30
+RESUME_AGENT_LLM_MAX_RETRIES=2
+RESUME_AGENT_WORKFLOW_TIMEOUT_SECONDS=90
+```
+
+Docker starts without an LLM key by default. To opt in, copy the ignored
+override before `docker compose up --build`:
+
+```bash
+cp compose.override.example.yaml compose.override.yaml
 ```
 
 LLM output is advisory. It may help revise the resume, but it cannot update
@@ -247,8 +289,16 @@ irrelevant fact in the data-role sample. It therefore remains opt-in and never
 decides which experience exists. See
 [`data/evaluation/matcher_report.md`](data/evaluation/matcher_report.md).
 
-`rag_eval` is a five-query sanity check, not a production-quality benchmark and
-not a resume claim.
+The retrieval regression suite runs 10 fixed queries through both the keyword
+baseline and the actual embedded-Qdrant `query_points` path. On the current
+desensitized facts, keyword Recall@5 is 0.50; Qdrant semantic Recall@5 is 1.00
+and MRR is 0.80. The small set is a regression fixture, not a production
+benchmark or resume claim.
+
+The Agent suite adds 24 fixed scenarios covering supported and unsupported
+queries, verifier repair, malformed verifier output, and bounded fail-closed
+routing. Runtime/API tests separately cover SQLite persistence, cross-session
+isolation, retries, dependency failures, trace privacy, and HTTP contracts.
 
 <details>
 <summary><strong>Run the evaluation commands</strong></summary>
@@ -256,6 +306,7 @@ not a resume claim.
 ```bash
 .venv/bin/python -m backend.resume_agent.eval_matchers
 .venv/bin/python -m backend.resume_agent.rag_eval
+.venv/bin/python -m backend.resume_agent.agent_eval
 ```
 
 </details>
@@ -281,7 +332,10 @@ Run `.venv/bin/python backend/run_cli.py --help` for every option.
 .venv/bin/python backend/run_cli.py validate
 .venv/bin/python -m backend.resume_agent.smoke_test
 .venv/bin/python -m backend.resume_agent.agent.test_agent
+.venv/bin/python -m backend.resume_agent.agent.test_runtime
+.venv/bin/python -m backend.resume_agent.agent_eval
 .venv/bin/python -m backend.resume_agent.eval_matchers
+.venv/bin/python -m backend.resume_agent.rag_eval
 .venv/bin/pip check
 ```
 
@@ -303,6 +357,8 @@ commits.
 
 - This is a local, single-user workflow without authentication, multi-user
   serving, production monitoring, or transactional database guarantees.
+  SQLite persistence and structured traces are intended for local/lightweight
+  use; they are not a substitute for a multi-user database and retention policy.
 - `aeo-review` currently reads TeX source, not text extracted from the final
   PDF. `register-canonical` hashes the PDF but does not validate ATS extraction
   order or layout readability.
@@ -317,11 +373,17 @@ commits.
 
 ```bash
 .venv/bin/uvicorn backend.resume_agent.web.app:app --reload
+# Or start the public-example configuration:
+docker compose up --build
 ```
 
 Open <http://127.0.0.1:8000> for JD analysis, application status, gap trends,
-mastery history, and interview feedback. Authorization, finalization, AEO, and
-canonical registration remain CLI operations in the current MVP.
+mastery history, and interview feedback. Open <http://127.0.0.1:8000/docs> for
+the API contract. Docker excludes private runtime files from the image context;
+the base Compose service receives no key, while the optional ignored override
+injects one at runtime. Named volumes persist checkpoints and indexes.
+Authorization, finalization, AEO, and canonical registration remain CLI
+operations in the current MVP.
 
 Design details are in [`docs/technical_design.md`](docs/technical_design.md),
 [`docs/risk_policy.md`](docs/risk_policy.md), and

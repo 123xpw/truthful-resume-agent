@@ -2,6 +2,18 @@
 
 All notable changes to this project are documented in this file.
 
+## [Unreleased]
+
+### Added
+
+- Read-only FastAPI Agent endpoints with UUID conversation IDs.
+- SQLite-backed LangGraph checkpoints and sanitized node-level traces.
+- Explicit LLM timeout/retry policy and structured dependency errors.
+- Fail-closed tool handling and explicit semantic-to-keyword degradation.
+- 24 fixed Agent regression scenarios and 12 runtime/API tests.
+- Actual keyword-versus-Qdrant retrieval regression evaluation.
+- Docker Compose startup using public example data by default.
+
 ## [0.1.0] - 2026-08-24
 
 First public MVP release.

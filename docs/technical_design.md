@@ -56,6 +56,9 @@ backend/resume_agent/
 │   ├── tools.py                # search_facts / verify_fact (simplified for LLM)
 │   ├── prompts.py              # SYSTEM_PROMPT (truthfulness gate principle)
 │   ├── memory.py               # save/recall/delete/list preferences (JSON)
+│   ├── runtime.py              # SQLite checkpoint + bounded request runtime
+│   ├── observability.py        # JSON logs + sanitized node traces
+│   ├── test_runtime.py         # persistence/isolation/failure/API contracts
 │   └── chat.py                 # REPL: prefs / 记住 / 忘记 commands
 │
 ├── web/ (FastAPI UI layer)
@@ -88,7 +91,8 @@ User JD input
      → canonical.py: professional-bullet provenance + actual TeX/PDF SHA256
 
 Conversational Agent (parallel surface, does not write resume):
-  chat.py → graph.py: retrieve → generate → verify → reflect loop
+  FastAPI/REPL → runtime.py → graph.py: retrieve → generate → verify → reflect
+  runtime.py: conversation UUID → SQLite thread_id + sanitized trace_id
   memory.py: long-term JSON preferences injected at generate node
 ```
 
@@ -117,6 +121,11 @@ data/jd_library/
   2026-08-12_tencent_ai_application.md   # private (gitignored)
 
 data/agent_memory.json                   # long-term conversational memory (private, gitignored)
+data/agent_runtime.sqlite3               # raw checkpoints + sanitized traces (private, gitignored)
+
+data/evaluation/
+  agent_cases.json                       # 24 deterministic graph scenarios
+  retrieval_cases.json                   # keyword/Qdrant regression queries
 
 data/outputs/
   tencent_ai_application/
@@ -295,7 +304,9 @@ The state graph implements a retrieve → generate → verify → reflect loop. 
 ```text
 START
   -> retrieve   (binds search_facts / verify_fact tools)
+       dependency/tool error -> END (structured failure; no generation)
   -> generate   (drafts an answer, injects long-term preferences)
+       LLM error -> END
   -> verify     (strict JSON PASS / FAIL against summary + boundaries)
   -> conditional edge:
        PASS        -> END
@@ -303,12 +314,40 @@ START
        FAIL >= 3 turns -> END
 ```
 
-`MAX_TURNS = 3` bounds the retry loop. The LLM is lazily constructed as a singleton via `get_model()` / `get_api_url()` / `get_api_key()` from `llm_client.py` (single source of truth for model/base URL).
+`MAX_TURNS = 3` bounds the verifier repair loop. Provider calls separately use
+an explicit timeout and at most two retries for timeout, connection, 429, or
+5xx failures. Authentication and invalid requests do not retry. The LLM is
+lazily constructed via the configuration functions in `llm_client.py`.
 
 ### Two-Layer Memory
 
-- **Short-term (in-process):** LangGraph `MemorySaver` checkpointer keyed by `thread_id` keeps multi-turn context within one chat session.
+- **Short-term (persistent local API):** `SqliteSaver` is keyed by a UUID
+  `thread_id`; it isolates conversations and survives process restarts. The
+  REPL can still use the in-memory default when no runtime checkpointer is
+  supplied. Checkpoints retain the messages and evidence required to resume
+  the graph, so the database is private even though the separate trace tables
+  are sanitized. SQLite is a local/lightweight backend, not a multi-user claim.
 - **Long-term (cross-session):** `data/agent_memory.json` stores user preferences as key/value pairs via `memory.py`. `graph.py._generate` injects `list_preferences()` into the system prompt so the agent remembers cross-session preferences. CRUD is exposed through `save_preference` / `recall_preference` / `delete_preference` / `list_preferences`.
+
+Conversation IDs provide state separation, not authentication. The API remains
+single-user and does not expose long-term preference writes.
+
+### Runtime Errors and Traces
+
+`runtime.py` streams graph updates so every completed node is recorded with
+duration, status, retry-safe error code, turn number, and evidence fact IDs.
+Raw chat, JD, resume content, provider bodies, and API keys are excluded from
+trace metadata. Each HTTP request receives an `X-Request-ID`; each Agent run
+returns a `trace_id`.
+
+- Fact-tool failures block before generation.
+- Missing/rejected LLM configuration returns a structured 503.
+- Provider timeouts return a structured 504 after bounded retries.
+- Exhausted verifier repair is a domain-level `blocked` result, not a transport
+  failure and not a verified answer.
+- `/api/analyze` may explicitly fall back from semantic to keyword retrieval;
+  the response reports `requested_matcher`, `used_matcher`, warnings, and
+  `degraded=true`.
 
 ### Chat REPL Commands
 
@@ -357,9 +396,12 @@ The LLM path is used only for general questions; it never updates facts, fragmen
 
 FastAPI-based web UI (`backend/resume_agent/web/`):
 
-- `app.py` — REST endpoints for JD analysis, application status, gap trends, mastery history, interview feedback, and static SPA serving.
+- `app.py` — REST endpoints for JD analysis, application status, gap trends,
+  mastery history, interview feedback, Agent conversations/messages/traces,
+  health/readiness, and static SPA serving.
 - `templates/index.html` — 5-tab vanilla-JS diagnostics SPA (no build step): JD 分析 / 申请列表 / 缺口趋势 / Mastery 时间线 / 面试反馈.
 - Start with `.venv/bin/uvicorn backend.resume_agent.web.app:app --reload`.
+- Or run the public-example image with `docker compose up --build`.
 
 The Web layer reuses core modules but does **not** mirror the CLI 1:1. Candidate authorization, finalization, AEO review, canonical registration, and delivery remain CLI-only in the current MVP.
 

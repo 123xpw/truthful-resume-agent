@@ -1,0 +1,7 @@
+# Copy to compose.override.yaml only when the container should call an LLM.
+# Docker Compose automatically loads the ignored override and substitutes the
+# value from the local .env or shell without adding it to the base compose file.
+services:
+  truthful-resume-agent:
+    environment:
+      RESUME_AGENT_LLM_API_KEY: ${RESUME_AGENT_LLM_API_KEY:-${DEEPSEEK_API_KEY:-}}

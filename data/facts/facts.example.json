@@ -319,6 +319,12 @@
       "search_facts",
       "verify_fact",
       "MemorySaver",
+      "SqliteSaver",
+      "FastAPI",
+      "conversation_id",
+      "trace_id",
+      "structured logging",
+      "timeout retry",
       "short-term memory",
       "long-term memory",
       "多轮记忆",
@@ -326,13 +332,14 @@
       "DeepSeek API",
       "retrieve generate verify reflect"
     ],
-    "summary": "Built a LangChain and LangGraph conversational agent over the fact bank with a retrieve-to-generate-to-verify-to-reflect StateGraph loop, fact search and verification tools, in-memory short-term checkpoints, and JSON-backed long-term preferences.",
+    "summary": "Built a read-only LangChain and LangGraph fact agent with a retrieve-to-generate-to-verify-to-reflect StateGraph loop, fact search and verification tools, a FastAPI conversation API, UUID-isolated SQLite checkpoints, bounded LLM timeout and retry handling, sanitized node traces, and fixed workflow regression cases.",
     "boundaries": [
-      "Personal/local fact Q&A agent, not a production assistant with multi-user serving, access control, or monitoring.",
+      "Personal/local fact Q&A service, not a multi-user assistant with authentication, distributed execution, or external production monitoring.",
       "The agent retrieves and explains existing facts; it does not write facts, review decisions, or resume wording.",
       "The verification node is an LLM judgment rather than cryptographic proof.",
-      "MemorySaver is in-memory short-term state; cross-process preferences use a separate local JSON file.",
-      "No persistence server or LangSmith tracing is implemented."
+      "The API uses a local SQLite checkpointer, while the REPL can still use MemorySaver; cross-session preferences use a separate local JSON file.",
+      "SQLite checkpoints contain conversation state and evidence; the separate trace tables exclude raw chat, JD, resume text, provider bodies, and API keys.",
+      "Timeouts and transient retries are bounded, but no distributed queue, circuit breaker, or availability SLA is implemented."
     ],
     "risk": "medium"
   }

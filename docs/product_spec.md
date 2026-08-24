@@ -84,3 +84,8 @@ Tracks company, job title, JD, generated draft, manual edits, and final decision
   unsupported causality.
 - A clean public clone passes validation and smoke tests using only desensitized
   `*.example.json` data.
+- The read-only Agent API isolates UUID conversations, persists local
+  checkpoints, exposes sanitized node traces, and never gains fact,
+  authorization, or delivery write access.
+- Dependency failures produce bounded retries, explicit degradation, or a
+  fail-closed response rather than an unverified answer.

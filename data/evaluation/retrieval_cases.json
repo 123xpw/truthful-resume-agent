@@ -1,0 +1,15 @@
+{
+  "version": "1.0",
+  "cases": [
+    {"id": "rag_explicit", "query": "RAG 向量检索 语义召回 Qdrant", "expected_fact_ids": ["project_truthful_resume_agent_rag_qdrant"]},
+    {"id": "data_api_explicit", "query": "Python REST API 金融数据抓取自动化", "expected_fact_ids": ["intern_data_automation"]},
+    {"id": "ai_coding_explicit", "query": "Claude Code AI 编程工具辅助复杂代码库", "expected_fact_ids": ["intern_optimization_ai_coding"]},
+    {"id": "multimodal_explicit", "query": "多模态生成 CLIP 图文对齐评测", "expected_fact_ids": ["project_emotion_pixel_eval"]},
+    {"id": "solver_explicit", "query": "求解器集成 优化 LP 后端", "expected_fact_ids": ["intern_solver_integration_clarabel"]},
+    {"id": "rag_paraphrase", "query": "cosine nearest-neighbor store for grounded fact chunks", "expected_fact_ids": ["project_truthful_resume_agent_rag_qdrant"]},
+    {"id": "agent_memory_paraphrase", "query": "remember earlier turns and validate answers against retrieved evidence", "expected_fact_ids": ["project_truthful_resume_agent_agent"]},
+    {"id": "data_report_paraphrase", "query": "automate spreadsheet reports from scheduled market price collection", "expected_fact_ids": ["intern_data_automation"]},
+    {"id": "solver_paraphrase", "query": "quality-gated mathematical solver with fallback when the solution is unreliable", "expected_fact_ids": ["intern_solver_integration_clarabel"]},
+    {"id": "image_eval_paraphrase", "query": "measure whether generated pictures align with text prompts", "expected_fact_ids": ["project_emotion_pixel_eval"]}
+  ]
+}

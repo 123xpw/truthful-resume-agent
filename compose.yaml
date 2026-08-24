@@ -1,0 +1,22 @@
+services:
+  truthful-resume-agent:
+    build:
+      context: .
+    ports:
+      - "8000:8000"
+    environment:
+      RESUME_AGENT_LLM_API_URL: ${RESUME_AGENT_LLM_API_URL:-https://api.deepseek.com/chat/completions}
+      RESUME_AGENT_LLM_MODEL: ${RESUME_AGENT_LLM_MODEL:-deepseek-chat}
+      RESUME_AGENT_LLM_TIMEOUT_SECONDS: ${RESUME_AGENT_LLM_TIMEOUT_SECONDS:-30}
+      RESUME_AGENT_LLM_MAX_RETRIES: ${RESUME_AGENT_LLM_MAX_RETRIES:-2}
+      RESUME_AGENT_WORKFLOW_TIMEOUT_SECONDS: ${RESUME_AGENT_WORKFLOW_TIMEOUT_SECONDS:-90}
+    volumes:
+      - agent-runtime:/app/data/runtime
+      - semantic-index:/app/data/semantic_index
+      - jd-library:/app/data/jd_library
+    restart: unless-stopped
+
+volumes:
+  agent-runtime:
+  semantic-index:
+  jd-library:

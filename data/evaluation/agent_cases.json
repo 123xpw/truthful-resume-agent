@@ -1,0 +1,30 @@
+{
+  "version": "1.0",
+  "description": "Deterministic Agent regression cases. Fake LLM responses isolate graph, retrieval, verifier-routing, and fail-closed behavior from provider variance.",
+  "cases": [
+    {"id": "supported_python_rest", "query": "Python REST API data processing", "expected_fact_ids": ["intern_data_automation"], "verifier": ["PASS"], "expected_status": "completed", "expected_reflections": 0},
+    {"id": "supported_excel_multisheet", "query": "Excel multi-sheet cloud schedule", "expected_fact_ids": ["intern_data_automation"], "verifier": ["PASS"], "expected_status": "completed", "expected_reflections": 0},
+    {"id": "supported_clarabel_kkt", "query": "Clarabel.cpp QP KKT benchmark", "expected_fact_ids": ["intern_solver_integration_clarabel"], "verifier": ["PASS"], "expected_status": "completed", "expected_reflections": 0},
+    {"id": "supported_mip_fallback", "query": "MIP root relaxation simplex fallback", "expected_fact_ids": ["intern_solver_integration_clarabel"], "verifier": ["PASS"], "expected_status": "completed", "expected_reflections": 0},
+    {"id": "supported_scip_rens", "query": "SCIP RENS MIP heuristics", "expected_fact_ids": ["intern_scip_heuristic_analysis"], "verifier": ["PASS"], "expected_status": "completed", "expected_reflections": 0},
+    {"id": "supported_diving", "query": "Farkas Diving Pscost Diving architecture analysis", "expected_fact_ids": ["intern_scip_heuristic_analysis"], "verifier": ["PASS"], "expected_status": "completed", "expected_reflections": 0},
+    {"id": "supported_scuc_constraints", "query": "UnitCommitment.jl 21 constraints paper-to-code", "expected_fact_ids": ["intern_optimization_ai_coding"], "verifier": ["PASS"], "expected_status": "completed", "expected_reflections": 0},
+    {"id": "supported_power_trajectories", "query": "startup shutdown trajectories minimum uptime", "expected_fact_ids": ["intern_optimization_ai_coding"], "verifier": ["PASS"], "expected_status": "completed", "expected_reflections": 0},
+    {"id": "supported_csharp_multimodal", "query": "C# Playwright Doubao multimodal business rules", "expected_fact_ids": ["intern_csharp_ai_mvp"], "verifier": ["PASS"], "expected_status": "completed", "expected_reflections": 0},
+    {"id": "supported_wechat_coze", "query": "WeChat mini program Coze essay correction", "expected_fact_ids": ["project_chinese_learning_mvp"], "verifier": ["PASS"], "expected_status": "completed", "expected_reflections": 0},
+    {"id": "supported_clip_eval", "query": "CLIP ablation image generation evaluation", "expected_fact_ids": ["project_emotion_pixel_eval"], "verifier": ["PASS"], "expected_status": "completed", "expected_reflections": 0},
+    {"id": "supported_pytorch_lab", "query": "PyTorch DDPM CFG SegFormer", "expected_fact_ids": ["project_dl_learning_lab"], "verifier": ["PASS"], "expected_status": "completed", "expected_reflections": 0},
+    {"id": "supported_resume_cli", "query": "FastAPI A/B/C/D confirmation LaTeX", "expected_fact_ids": ["project_truthful_resume_agent_cli"], "verifier": ["PASS"], "expected_status": "completed", "expected_reflections": 0},
+    {"id": "supported_qdrant", "query": "Qdrant fastembed fact chunking embedding", "expected_fact_ids": ["project_truthful_resume_agent_rag_qdrant"], "verifier": ["PASS"], "expected_status": "completed", "expected_reflections": 0},
+    {"id": "supported_langgraph", "query": "LangGraph StateGraph verify_fact tool calling", "expected_fact_ids": ["project_truthful_resume_agent_agent"], "verifier": ["PASS"], "expected_status": "completed", "expected_reflections": 0},
+    {"id": "supported_agent_memory", "query": "short-term memory retrieve generate verify reflect", "expected_fact_ids": ["project_truthful_resume_agent_agent"], "verifier": ["PASS"], "expected_status": "completed", "expected_reflections": 0},
+    {"id": "repair_then_pass_data", "query": "Python ETL REST API", "expected_fact_ids": ["intern_data_automation"], "verifier": ["FAIL", "PASS"], "expected_status": "completed", "expected_reflections": 1},
+    {"id": "repair_then_pass_rag", "query": "RAG fact_id citation verification boundary check", "expected_fact_ids": ["project_truthful_resume_agent_rag_qdrant"], "verifier": ["FAIL", "PASS"], "expected_status": "completed", "expected_reflections": 1},
+    {"id": "unsupported_kubernetes", "query": "Kubernetes service mesh production cluster", "expected_fact_ids": [], "verifier": ["FAIL"], "expected_status": "blocked", "expected_reflections": 3},
+    {"id": "unsupported_training", "query": "SFT RLHF DeepSpeed distributed training", "expected_fact_ids": [], "verifier": ["FAIL"], "expected_status": "blocked", "expected_reflections": 3},
+    {"id": "unsupported_payments", "query": "payment refund CRM transaction processing", "expected_fact_ids": [], "verifier": ["FAIL"], "expected_status": "blocked", "expected_reflections": 3},
+    {"id": "unsupported_protocols", "query": "MCP A2A protocol implementation", "expected_fact_ids": [], "verifier": ["FAIL"], "expected_status": "blocked", "expected_reflections": 3},
+    {"id": "malformed_verifier_fastapi", "query": "FastAPI fact bank manual review", "expected_fact_ids": ["project_truthful_resume_agent_cli"], "verifier": ["MALFORMED"], "expected_status": "blocked", "expected_reflections": 3},
+    {"id": "invalid_schema_langgraph", "query": "LangGraph MemorySaver tool calling", "expected_fact_ids": ["project_truthful_resume_agent_agent"], "verifier": ["INVALID_SCHEMA"], "expected_status": "blocked", "expected_reflections": 3}
+  ]
+}

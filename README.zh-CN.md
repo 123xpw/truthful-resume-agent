@@ -112,6 +112,31 @@ flowchart TB
 - **选材与交付：**始终考虑完整已授权素材池，明确报告容量和遗漏原因，并对最终专业 bullet 逐条做溯源检查。
 - **分析与学习：**AEO 检查、只读 LangGraph 事实问答 Agent、投递结果、面试反馈、mastery 历史和跨 JD 缺口趋势。
 
+## 只读 Agent API
+
+FastAPI 已暴露事实问答 Agent，但不授予事实、措辞授权或投递写权限：
+
+```bash
+.venv/bin/uvicorn backend.resume_agent.web.app:app --reload
+
+curl -X POST http://127.0.0.1:8000/api/v1/conversations
+curl -X POST http://127.0.0.1:8000/api/v1/conversations/CONVERSATION_ID/messages \
+  -H 'Content-Type: application/json' \
+  -d '{"message":"哪些事实能支撑 Python API 经历？"}'
+```
+
+响应会返回 `trace_id`、校验状态和实际经过的 LangGraph 节点。会话通过 UUID 隔离，并由本地 SQLite checkpointer 持久化。节点 trace 只保存 ID、耗时、状态和证据 fact ID，不保存完整对话、JD 或简历正文；但 checkpoint 表会保存恢复会话所需的消息和检索证据，因此整个 runtime 数据库必须按私密数据管理。
+
+| 故障 | 系统行为 |
+| --- | --- |
+| LLM 超时、429 或服务端 5xx | 最多有界重试 2 次，之后返回结构化 503/504 |
+| LLM Key 缺失或被拒绝 | 立即返回结构化 503，确定性 CLI 能力继续可用 |
+| 事实工具异常 | 在生成前 fail-closed |
+| `/api/analyze` 语义检索异常 | 显式回退关键词检索并返回 `degraded=true`，除非禁用回退 |
+| verifier 经过 3 次反思仍失败 | HTTP 200 但 `status=blocked`，不把草稿冒充成已校验结果 |
+
+它仍是本地单用户 API。`conversation_id` 只用于状态隔离，不等于身份认证或授权。
+
 ## 完整交付流程
 
 ### 1. 准备、授权与生成
@@ -188,6 +213,15 @@ cp .env.example .env
 RESUME_AGENT_LLM_API_KEY=your-key
 RESUME_AGENT_LLM_API_URL=https://api.deepseek.com/chat/completions
 RESUME_AGENT_LLM_MODEL=deepseek-chat
+RESUME_AGENT_LLM_TIMEOUT_SECONDS=30
+RESUME_AGENT_LLM_MAX_RETRIES=2
+RESUME_AGENT_WORKFLOW_TIMEOUT_SECONDS=90
+```
+
+Docker 默认不接收 LLM Key。需要启用时，先复制被 Git 忽略的 override，再运行 `docker compose up --build`：
+
+```bash
+cp compose.override.example.yaml compose.override.yaml
 ```
 
 LLM 输出只是建议。它可以辅助修改简历，但不能更新事实、授权记录、溯源确认或投递文件。`.env` 已被忽略，API Key 也不会写入报告。
@@ -207,7 +241,9 @@ LLM 输出只是建议。它可以辅助修改简历，但不能更新事实、�
 
 语义检索提高了召回率，但降低了精度，并在数据岗样例中选中一条无关事实。因此它继续保持 opt-in，且不能决定某段经历是否存在。详见 [`data/evaluation/matcher_report.md`](data/evaluation/matcher_report.md)。
 
-`rag_eval` 只是 5 条查询的 sanity check，不是生产级评测，也不作为简历成绩。
+检索回归集使用 10 条固定 query，同时运行 keyword baseline 和真实的 embedded-Qdrant `query_points` 路径。在当前脱敏事实上，keyword Recall@5 为 0.50，Qdrant semantic Recall@5 为 1.00、MRR 为 0.80。该小型数据集只是回归基线，不是生产 benchmark 或简历成绩。
+
+Agent 回归集包含 24 个固定场景，覆盖有证据/无证据问题、verifier 修正、非法 verifier 输出和有界 fail-closed 路由。独立 runtime/API 测试覆盖 SQLite 持久化、会话隔离、重试、依赖故障、trace 隐私和 HTTP 契约。
 
 <details>
 <summary><strong>运行评测命令</strong></summary>
@@ -215,6 +251,7 @@ LLM 输出只是建议。它可以辅助修改简历，但不能更新事实、�
 ```bash
 .venv/bin/python -m backend.resume_agent.eval_matchers
 .venv/bin/python -m backend.resume_agent.rag_eval
+.venv/bin/python -m backend.resume_agent.agent_eval
 ```
 
 </details>
@@ -240,7 +277,10 @@ LLM 输出只是建议。它可以辅助修改简历，但不能更新事实、�
 .venv/bin/python backend/run_cli.py validate
 .venv/bin/python -m backend.resume_agent.smoke_test
 .venv/bin/python -m backend.resume_agent.agent.test_agent
+.venv/bin/python -m backend.resume_agent.agent.test_runtime
+.venv/bin/python -m backend.resume_agent.agent_eval
 .venv/bin/python -m backend.resume_agent.eval_matchers
+.venv/bin/python -m backend.resume_agent.rag_eval
 .venv/bin/pip check
 ```
 
@@ -252,7 +292,7 @@ Smoke 同时支持私有运行文件名和公开 `*.example.json` 回退数据�
 
 ## 已知边界
 
-- 当前是本地单用户流程，不包含鉴权、多用户服务、生产监控或数据库事务保证。
+- 当前是本地单用户流程，不包含鉴权、多用户服务、生产监控或数据库事务保证。SQLite 持久化与结构化 trace 只定位于本地/轻量使用，不替代多用户数据库和保留策略。
 - `aeo-review` 当前读取 TeX 源码，而不是从最终 PDF 抽取的文本。`register-canonical` 会对 PDF 做哈希，但还不会校验 ATS 文本抽取顺序或版式可读性。
 - TTY 限制只是增加自动化代答成本，不是候选人亲自授权的密码学证明。
 - Agent verifier 是对证据包的 LLM 判断，不是形式化逻辑证明；校验输出格式异常时会 fail-closed。
@@ -262,9 +302,11 @@ Smoke 同时支持私有运行文件名和公开 `*.example.json` 回退数据�
 
 ```bash
 .venv/bin/uvicorn backend.resume_agent.web.app:app --reload
+# 或使用公开样例配置启动：
+docker compose up --build
 ```
 
-打开 <http://127.0.0.1:8000> 查看 JD 分析、申请状态、缺口趋势、mastery 历史和面试反馈。当前 MVP 的授权、最终生成、AEO 和最终简历登记仍使用 CLI。
+打开 <http://127.0.0.1:8000> 查看 JD 分析、申请状态、缺口趋势、mastery 历史和面试反馈；打开 <http://127.0.0.1:8000/docs> 查看 API 契约。Docker 会从构建上下文排除私有运行文件；基础 Compose 不接收 Key，只有可选且被 Git 忽略的 override 会在运行时注入。Named volume 保存 checkpoint 和索引。当前 MVP 的授权、最终生成、AEO 和最终简历登记仍使用 CLI。
 
 设计细节见 [`docs/technical_design.md`](docs/technical_design.md)、[`docs/risk_policy.md`](docs/risk_policy.md) 和 [`docs/evaluation_plan.md`](docs/evaluation_plan.md)。
 

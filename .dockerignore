@@ -1,31 +1,39 @@
-.venv/
-__pycache__/
+.git
+.github
+.venv
+__pycache__
+**/__pycache__
 *.pyc
+**/*.py[cod]
 .DS_Store
-tmp/
+**/.DS_Store
 .env
 compose.override.yaml
-data/profile/profile.private.json
+tmp
+
+# Private runtime inputs and generated artifacts must never enter an image.
 data/facts/facts.json
+data/profile/profile.json
+data/profile/profile.private.json
 data/resume_fragments/fragments.json
-data/semantic_index/
-data/outputs/
-docs/claude_sync.md
-docs/codex_action_items.md
-docs/session_checkpoint.md
+data/outputs
+data/authorizations
+data/application_outcomes
 data/application_outcomes.json
+data/agent_memory
 data/agent_memory.json
-data/agent_runtime.sqlite3
-data/agent_runtime.sqlite3-shm
-data/agent_runtime.sqlite3-wal
+data/agent_runtime.sqlite3*
 data/mastery_history.json
 data/resume_authorizations.json
-data/jd_library/
+data/jd_library
+data/semantic_index
 data/evaluation/career_trends.md
 data/evaluation/gap_snapshots.json
 
-# Internal working/handoff docs (not for the public repo)
-SYNC.md
+# Internal working and handoff documents are local-only, just like .gitignore.
+docs/claude_sync.md
+docs/codex_action_items.md
+docs/session_checkpoint.md
 docs/qwen_no_token_period.md
 docs/handover_*.md
 docs/project_issues_to_fix.md

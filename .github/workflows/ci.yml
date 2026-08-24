@@ -11,11 +11,20 @@ permissions:
 jobs:
   verify-public-clone:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
 
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
+
+      - name: Validate Docker Compose
+        run: docker compose config
+
+      - name: Build public Docker image
+        run: docker build --tag truthful-resume-agent:ci .
+
+      - name: Validate public data inside Docker image
+        run: docker run --rm truthful-resume-agent:ci python backend/run_cli.py validate
 
       - name: Set up Python
         uses: actions/setup-python@v7
@@ -36,6 +45,12 @@ jobs:
 
       - name: Run conversational Agent tests
         run: python -m backend.resume_agent.agent.test_agent
+
+      - name: Run Agent runtime and API tests
+        run: python -m backend.resume_agent.agent.test_runtime
+
+      - name: Run fixed Agent regression cases
+        run: python -m backend.resume_agent.agent_eval
 
       - name: Rebuild matcher evaluation
         run: python -m backend.resume_agent.eval_matchers --output /tmp/matcher_report.md
