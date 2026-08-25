@@ -378,16 +378,28 @@ commits.
 docker compose up --build
 ```
 
+On macOS, after the local environment is installed, double-click
+`启动投递看板.command`; use `停止投递看板.command` to stop its background server.
+
 Open <http://127.0.0.1:8000> for JD analysis, application status, the local
 outcome tracker, gap trends, mastery history, and interview feedback. The
-outcome tracker records, edits, and deletes local status events, optionally
-linking an allowed output/delivery PDF by SHA256; these operations make zero
-LLM calls. Open <http://127.0.0.1:8000/docs> for the API contract. Docker
+outcome tracker records and edits local status events, archives/restores them
+without physical deletion, and can link an allowed output/delivery PDF by
+SHA256. Delivery-folder cards provide one-click status updates. These
+operations make zero LLM calls. Open <http://127.0.0.1:8000/docs> for the API contract. Docker
 excludes private runtime files from the image context;
 the base Compose service receives no key, while the optional ignored override
 injects one at runtime. Named volumes persist checkpoints, outcome events, and indexes.
 Authorization, finalization, AEO, and canonical registration remain CLI
 operations in the current MVP.
+
+Outcome state lives in a local SQLite database. The first open imports the
+legacy ignored `application_outcomes.json` once without modifying it. Every
+mutation creates a rolling local backup, while the dashboard exposes database
+integrity, data mode, archive restore, and JSON/CSV export. The default mode is
+`preview`: keep another copy of real records until backup/restore and pilot
+checks have passed. Database files, backups, PDFs, and legacy outcome JSON stay
+outside Git and the public Docker image.
 
 Design details are in [`docs/technical_design.md`](docs/technical_design.md),
 [`docs/risk_policy.md`](docs/risk_policy.md), and

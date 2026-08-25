@@ -307,7 +307,11 @@ Smoke 同时支持私有运行文件名和公开 `*.example.json` 回退数据�
 docker compose up --build
 ```
 
-打开 <http://127.0.0.1:8000> 查看 JD 分析、申请状态、本地投递看板、缺口趋势、mastery 历史和面试反馈。投递看板可记录、修改和删除状态事件，并可选关联允许目录中的实际 PDF 及其 SHA256；这些操作不调用 LLM。打开 <http://127.0.0.1:8000/docs> 查看 API 契约。Docker 会从构建上下文排除私有运行文件；基础 Compose 不接收 Key，只有可选且被 Git 忽略的 override 会在运行时注入。Named volume 保存 checkpoint、投递事件和索引。当前 MVP 的授权、最终生成、AEO 和最终简历登记仍使用 CLI。
+在 macOS 完成本地环境安装后，可直接双击 `启动投递看板.command`；需要关闭后台服务时双击 `停止投递看板.command`。
+
+打开 <http://127.0.0.1:8000> 查看 JD 分析、申请状态、本地投递看板、缺口趋势、mastery 历史和面试反馈。投递看板可记录和修改状态事件，以可恢复的“撤销”代替物理删除，并可关联允许目录中的实际 PDF 及其 SHA256；“投递版本”卡片支持一键更新状态。这些操作不调用 LLM。打开 <http://127.0.0.1:8000/docs> 查看 API 契约。Docker 会从构建上下文排除私有运行文件；基础 Compose 不接收 Key，只有可选且被 Git 忽略的 override 会在运行时注入。Named volume 保存 checkpoint、投递事件和索引。当前 MVP 的授权、最终生成、AEO 和最终简历登记仍使用 CLI。
+
+投递状态保存在本地 SQLite。第一次打开时会一次性导入旧的、被 Git 忽略的 `application_outcomes.json`，且不会修改原文件。每次数据变更都会产生滚动备份；网页同时显示数据库完整性、数据模式，并提供记录恢复和 JSON/CSV 导出。默认是 `preview`：在备份恢复和 Pilot 验证完成前，真实投递记录仍需保留另一份副本。数据库、备份、PDF 和旧 JSON 都不会进入 Git 或公开 Docker 镜像。
 
 设计细节见 [`docs/technical_design.md`](docs/technical_design.md)、[`docs/risk_policy.md`](docs/risk_policy.md) 和 [`docs/evaluation_plan.md`](docs/evaluation_plan.md)。
 

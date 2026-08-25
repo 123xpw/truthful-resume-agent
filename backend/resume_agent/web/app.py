@@ -10,12 +10,13 @@ from dataclasses import asdict
 from functools import lru_cache
 import os
 from pathlib import Path
+import sqlite3
 import time
 from typing import Literal
 from uuid import UUID, uuid4
 
 from fastapi import Depends, FastAPI, HTTPException, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, Response
 from pydantic import BaseModel, Field
 
 from ..agent.observability import log_event
@@ -28,12 +29,18 @@ from ..interview_feedback import load_feedback, record_feedback, render_feedback
 from ..mastery_history import load_mastery_history, render_mastery_history
 from ..outcomes import (
     VALID_OUTCOMES,
+    create_outcome_backup,
     default_outcome_path,
     delete_outcome,
+    export_outcomes,
     list_resume_artifacts,
+    list_outcome_backups,
     load_outcomes,
+    outcome_storage_info,
     record_outcome,
     resolve_resume_ref,
+    restore_outcome,
+    restore_outcome_backup,
     resume_ref_for_path,
     summarize_outcomes,
     update_outcome,
@@ -73,6 +80,10 @@ class OutcomeRequest(BaseModel):
     date: str | None = None
     note: str = Field(default="", max_length=1000)
     resume_ref: str | None = Field(default=None, max_length=1000)
+
+
+class OutcomeBackupRestoreRequest(BaseModel):
+    confirm: Literal["RESTORE"]
 
 
 @lru_cache(maxsize=1)
@@ -225,21 +236,102 @@ def _outcome_payload(event, project_root: Path) -> dict:
 
 @app.get("/api/outcomes")
 def get_outcomes(project_root: Path = Depends(get_project_root)) -> dict:
-    events = load_outcomes(default_outcome_path(project_root))
-    ordered = sorted(events, key=lambda item: (item.date, item.application, item.event_id), reverse=True)
+    all_events = load_outcomes(default_outcome_path(project_root), include_archived=True)
+    events = [event for event in all_events if event.archived_at is None]
+    archived = [event for event in all_events if event.archived_at is not None]
+    ordered = sorted(
+        events,
+        key=lambda item: (item.date, item.created_at, item.application, item.event_id),
+        reverse=True,
+    )
     return {
         "events": [_outcome_payload(event, project_root) for event in ordered],
+        "archived_events": [_outcome_payload(event, project_root) for event in reversed(archived)],
         "summary": summarize_outcomes(events),
+        "storage": outcome_storage_info(project_root),
         "valid_statuses": sorted(VALID_OUTCOMES),
         "llm_calls": 0,
     }
+
+
+@app.get("/api/outcomes/storage")
+def get_outcome_storage(project_root: Path = Depends(get_project_root)) -> dict:
+    return {"storage": outcome_storage_info(project_root), "llm_calls": 0}
+
+
+@app.post("/api/outcomes/backups", status_code=201)
+def post_outcome_backup(project_root: Path = Depends(get_project_root)) -> dict:
+    try:
+        backup = create_outcome_backup(default_outcome_path(project_root))
+    except (OSError, sqlite3.Error, RuntimeError) as exc:
+        raise HTTPException(
+            status_code=500,
+            detail={"code": "OUTCOME_BACKUP_FAILED", "message": "Failed to back up outcome data."},
+        ) from exc
+    return {"backup_name": backup.name, "llm_calls": 0}
+
+
+@app.get("/api/outcomes/backups")
+def get_outcome_backups(project_root: Path = Depends(get_project_root)) -> dict:
+    path = default_outcome_path(project_root)
+    backups = list_outcome_backups(path)
+    return {
+        "backups": [
+            {
+                "name": backup.name,
+                "size_bytes": backup.stat().st_size,
+                "modified_at": backup.stat().st_mtime,
+            }
+            for backup in backups
+        ],
+        "llm_calls": 0,
+    }
+
+
+@app.post("/api/outcomes/backups/{backup_name}/restore")
+def post_outcome_backup_restore(
+    backup_name: str,
+    req: OutcomeBackupRestoreRequest,
+    project_root: Path = Depends(get_project_root),
+) -> dict:
+    try:
+        safety_backup = restore_outcome_backup(default_outcome_path(project_root), backup_name)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail={"code": "INVALID_OUTCOME_BACKUP", "message": str(exc)},
+        ) from exc
+    except (OSError, sqlite3.Error, RuntimeError) as exc:
+        raise HTTPException(
+            status_code=500,
+            detail={"code": "OUTCOME_RESTORE_FAILED", "message": "Failed to restore outcome data."},
+        ) from exc
+    return {"restored": True, "safety_backup_name": safety_backup.name, "llm_calls": 0}
+
+
+@app.get("/api/outcomes/export")
+def get_outcome_export(
+    format: Literal["json", "csv"] = "json",
+    project_root: Path = Depends(get_project_root),
+) -> Response:
+    events = load_outcomes(default_outcome_path(project_root), include_archived=True)
+    content, media_type = export_outcomes(events, format)
+    filename = f"application_outcomes.{format}"
+    return Response(
+        content=content,
+        media_type=media_type,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @app.get("/api/resume-artifacts")
 def get_resume_artifacts(project_root: Path = Depends(get_project_root)) -> dict:
     artifacts = list_resume_artifacts(project_root)
     return {
-        "artifacts": [asdict(item) for item in artifacts],
+        "artifacts": [
+            {**asdict(item), "application_key": slugify(item.application_hint)}
+            for item in artifacts
+        ],
         "count": len(artifacts),
         "llm_calls": 0,
     }
@@ -259,7 +351,7 @@ def post_outcome(req: OutcomeRequest, project_root: Path = Depends(get_project_r
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail={"code": "INVALID_OUTCOME", "message": str(exc)}) from exc
-    except OSError as exc:
+    except (OSError, sqlite3.Error, RuntimeError) as exc:
         raise HTTPException(
             status_code=500,
             detail={"code": "OUTCOME_WRITE_FAILED", "message": "Failed to save outcome."},
@@ -289,7 +381,7 @@ def put_outcome(
             status_code=status_code,
             detail={"code": "OUTCOME_NOT_FOUND" if status_code == 404 else "INVALID_OUTCOME", "message": str(exc)},
         ) from exc
-    except OSError as exc:
+    except (OSError, sqlite3.Error, RuntimeError) as exc:
         raise HTTPException(
             status_code=500,
             detail={"code": "OUTCOME_WRITE_FAILED", "message": "Failed to update outcome."},
@@ -306,12 +398,32 @@ def remove_outcome(event_id: str, project_root: Path = Depends(get_project_root)
             status_code=404,
             detail={"code": "OUTCOME_NOT_FOUND", "message": str(exc)},
         ) from exc
-    except OSError as exc:
+    except (OSError, sqlite3.Error, RuntimeError) as exc:
         raise HTTPException(
             status_code=500,
             detail={"code": "OUTCOME_WRITE_FAILED", "message": "Failed to delete outcome."},
         ) from exc
-    return {"deleted": True, "event_id": event_id, "llm_calls": 0}
+    return {"deleted": True, "archived": True, "event_id": event_id, "llm_calls": 0}
+
+
+@app.post("/api/outcomes/{event_id}/restore")
+def restore_archived_outcome(
+    event_id: str,
+    project_root: Path = Depends(get_project_root),
+) -> dict:
+    try:
+        event = restore_outcome(project_root, event_id)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=404,
+            detail={"code": "OUTCOME_NOT_FOUND", "message": str(exc)},
+        ) from exc
+    except (OSError, sqlite3.Error, RuntimeError) as exc:
+        raise HTTPException(
+            status_code=500,
+            detail={"code": "OUTCOME_RESTORE_FAILED", "message": "Failed to restore outcome."},
+        ) from exc
+    return {"event": _outcome_payload(event, project_root), "llm_calls": 0}
 
 
 @app.get("/api/status/{name}")

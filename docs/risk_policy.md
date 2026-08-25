@@ -97,10 +97,17 @@ facts, authorizations, provenance confirmations, or delivered artifacts.
 
 ## Local Outcome Tracker Boundary
 
-- Recording, editing, listing, summarizing, and deleting outcomes must not call
+- Recording, editing, listing, summarizing, archiving, and restoring outcomes must not call
   an LLM or transmit the private event data externally.
 - A Web-selected resume may be hashed only when it resolves to an existing PDF
   under the project output root or the configured delivery root.
 - Filename warnings such as `未验证勿投递` and `废弃` remain visible; the
   tracker records observed history but does not certify that a file was safe to
   submit.
+- The default `preview` mode is not an authorization to discard the user's
+  independent source records. Promotion to `pilot` or `trusted` is a deliberate
+  operational decision after migration, restart, concurrency, backup, restore,
+  export, and privacy checks.
+- SQLite databases, WAL/SHM files, rolling backups, legacy JSON, and launcher
+  logs/PIDs are private runtime artifacts and must remain outside Git and image
+  build contexts.

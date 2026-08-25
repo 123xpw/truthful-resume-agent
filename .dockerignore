@@ -20,6 +20,9 @@ data/outputs
 data/authorizations
 data/application_outcomes
 data/application_outcomes.json
+data/application_tracker.sqlite3*
+data/outcome_backups
+data/runtime
 data/agent_memory
 data/agent_memory.json
 data/agent_runtime.sqlite3*

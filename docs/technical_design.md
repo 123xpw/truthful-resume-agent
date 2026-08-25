@@ -407,11 +407,20 @@ The Web layer reuses core modules but does **not** mirror the CLI 1:1. Candidate
 
 Outcome endpoints are deterministic and make no LLM calls. PDF references use
 opaque `output:` or `delivery:` roots and resolve paths before hashing; traversal
-outside those roots and non-PDF targets are rejected. The private outcome JSON
-remains gitignored. Existing pre-ID records receive stable legacy IDs on read
-and are upgraded only when the user edits or deletes an event. Native runs keep
-the legacy local path; Compose sets `RESUME_AGENT_OUTCOME_PATH` inside the
-existing runtime volume so events survive container replacement.
+outside those roots and non-PDF targets are rejected. The source of truth is a
+versioned local SQLite database with WAL, busy timeout, prepared parameter
+binding, active-date/application indexes, and an append-only mutation audit.
+User deletion sets `archived_at`; restoration clears it and appends another
+audit snapshot. Every mutation creates a verified rolling SQLite backup, and a
+full restore first creates a safety backup. JSON/CSV export includes archived
+history.
+
+Existing private `application_outcomes.json` records receive stable legacy IDs
+and are imported once without mutating the source. Native runs default to
+`data/application_tracker.sqlite3`; Compose sets `RESUME_AGENT_OUTCOME_PATH`
+inside the existing runtime volume so events and backups survive container
+replacement. `RESUME_AGENT_DATA_MODE` defaults to `preview`; `pilot` and
+`trusted` are operational declarations, not inferred from event count.
 
 ## Memory Evolution: Three-Layer Feedback Loop
 

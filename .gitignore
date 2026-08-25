@@ -14,6 +14,11 @@ docs/claude_sync.md
 docs/codex_action_items.md
 docs/session_checkpoint.md
 data/application_outcomes.json
+data/application_tracker.sqlite3
+data/application_tracker.sqlite3-shm
+data/application_tracker.sqlite3-wal
+data/outcome_backups/
+data/runtime/
 data/agent_memory.json
 data/agent_runtime.sqlite3
 data/agent_runtime.sqlite3-shm

@@ -58,9 +58,22 @@
   .danger-button { background: var(--danger); }
   .compact-button { padding: 0.3rem 0.65rem; font-size: 0.78rem; }
   .artifact-warning { color: var(--warning); font-size: 0.8rem; margin-top: 0.35rem; }
+  .storage-card { border-left: 4px solid var(--warning); }
+  .storage-card.trusted { border-left-color: var(--success); }
+  .storage-line { color: var(--muted); font-size: 0.8rem; overflow-wrap: anywhere; }
+  .mode-badge { display: inline-block; padding: 0.15rem 0.55rem; border-radius: 999px; background: #fff3e0; color: #9a4d00; font-size: 0.75rem; font-weight: 700; }
+  .mode-badge.trusted { background: #eafaf1; color: var(--success); }
+  .quick-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem; }
+  .quick-card { border: 1px solid var(--border); border-radius: 8px; padding: 1rem; background: #fbfcfe; }
+  .quick-card h3 { font-size: 0.95rem; margin-bottom: 0.25rem; }
+  .quick-card p { color: var(--muted); font-size: 0.78rem; margin-bottom: 0.65rem; overflow-wrap: anywhere; }
+  .quick-current { font-size: 0.78rem; color: var(--accent); margin-bottom: 0.55rem; }
+  details { margin-top: 1rem; }
+  summary { cursor: pointer; color: var(--muted); font-size: 0.85rem; }
   @media (max-width: 760px) {
     .container { padding: 1rem; }
     .stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .quick-grid { grid-template-columns: 1fr; }
     table { display: block; overflow-x: auto; }
   }
 </style>
@@ -118,11 +131,28 @@
   <!-- 投递看板 -->
   <div class="panel" id="panel-outcomes">
     <div class="token-note"><strong>本页面不调用 LLM，记录与统计均为本地确定性操作，Token 消耗为 0。</strong></div>
+    <div class="card storage-card" id="outcome-storage-card">
+      <h2>本地数据状态</h2>
+      <div id="outcome-storage">正在检查本地数据库...</div>
+      <br>
+      <div class="actions">
+        <button onclick="createOutcomeBackup()">立即备份</button>
+        <button onclick="downloadOutcomeExport('json')" class="secondary-button">导出 JSON</button>
+        <button onclick="downloadOutcomeExport('csv')" class="secondary-button">导出 CSV</button>
+      </div>
+      <div id="outcome-storage-result"></div>
+    </div>
     <div class="stats-grid" id="outcome-summary">
       <div class="stat-card"><div class="stat-value">—</div><div class="stat-label">追踪申请</div></div>
       <div class="stat-card"><div class="stat-value">—</div><div class="stat-label">状态事件</div></div>
       <div class="stat-card"><div class="stat-value">—</div><div class="stat-label">进入面试</div></div>
       <div class="stat-card"><div class="stat-value">—</div><div class="stat-label">Offer</div></div>
+    </div>
+    <div class="card">
+      <h2>投递版本快速记录</h2>
+      <p class="storage-line">自动读取本机“投递版本”目录。点击状态后直接记录今天，并关联该目录中最新的可用 PDF。</p>
+      <br>
+      <div id="outcome-quick-cards" class="quick-grid"></div>
     </div>
     <div class="card">
       <h2 id="outcome-form-title">记录投递结果</h2>
@@ -170,6 +200,10 @@
       <h2>状态时间线</h2>
       <button onclick="loadOutcomes()">刷新</button>
       <div id="outcomes-result"></div>
+      <details>
+        <summary id="archived-outcome-summary">已撤销记录（0）</summary>
+        <div id="archived-outcomes-result"></div>
+      </details>
     </div>
   </div>
 
@@ -231,6 +265,7 @@
 <script>
 const API = '/api';
 let outcomeEvents = [];
+let archivedOutcomeEvents = [];
 let resumeArtifacts = [];
 const outcomeLabels = {
   applied: '已投递', assessment: '测评中', interview: '面试', offer: 'Offer',
@@ -242,9 +277,13 @@ document.querySelectorAll('.tab').forEach(tab => {
     document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
     tab.classList.add('active');
     document.getElementById('panel-' + tab.dataset.tab).classList.add('active');
+    history.replaceState(null, '', '#' + tab.dataset.tab);
     if (tab.dataset.tab === 'outcomes') initializeOutcomeDashboard();
   };
 });
+
+const requestedTab = document.querySelector(`.tab[data-tab="${location.hash.slice(1)}"]`);
+if (requestedTab) requestedTab.click();
 
 async function api(path, opts = {}) {
   const res = await fetch(API + path, opts);
@@ -259,6 +298,12 @@ async function api(path, opts = {}) {
 
 function escapeHtml(value) {
   return String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[ch]));
+}
+
+function localToday() {
+  const now = new Date();
+  const offset = now.getTimezoneOffset() * 60000;
+  return new Date(now.getTime() - offset).toISOString().slice(0, 10);
 }
 
 function showResult(id, html, cls = '') {
@@ -297,9 +342,10 @@ async function loadApplications() {
 
 async function initializeOutcomeDashboard() {
   if (!document.getElementById('outcome-date').value) {
-    document.getElementById('outcome-date').value = new Date().toISOString().slice(0, 10);
+    document.getElementById('outcome-date').value = localToday();
   }
   try {
+    const previousResume = document.getElementById('outcome-resume').value;
     const [applications, artifacts] = await Promise.all([api('/applications'), api('/resume-artifacts')]);
     resumeArtifacts = artifacts.artifacts;
     const names = new Set(applications.applications.map(item => item.name));
@@ -313,6 +359,9 @@ async function initializeOutcomeDashboard() {
     document.getElementById('outcome-resume').innerHTML = '<option value="">不关联 PDF</option>' + resumeArtifacts.map(item =>
       `<option value="${escapeHtml(item.ref)}" data-state="${escapeHtml(item.state)}">${escapeHtml(item.label + stateSuffix[item.state])}</option>`
     ).join('');
+    if ([...document.getElementById('outcome-resume').options].some(option => option.value === previousResume)) {
+      document.getElementById('outcome-resume').value = previousResume;
+    }
     await loadOutcomes();
   } catch (e) {
     showResult('outcomes-result', escapeHtml(e.message), 'status-err');
@@ -335,12 +384,73 @@ function renderOutcomeSummary(summary) {
     <div class="stat-card"><div class="stat-value">${summary.ever_by_status.offer}</div><div class="stat-label">Offer·${(summary.offer_rate * 100).toFixed(0)}%</div></div>`;
 }
 
+function renderOutcomeStorage(storage) {
+  const modeLabels = {preview: 'Preview · 真实数据副本', pilot: 'Pilot · 并行试用', trusted: 'Trusted Local · 正式数据'};
+  const trusted = storage.mode === 'trusted';
+  const card = document.getElementById('outcome-storage-card');
+  card.classList.toggle('trusted', trusted);
+  document.getElementById('outcome-storage').innerHTML = `
+    <span class="mode-badge ${trusted ? 'trusted' : ''}">${escapeHtml(modeLabels[storage.mode] || storage.mode)}</span>
+    <span class="badge ${storage.integrity === 'ok' ? 'status-ok' : 'status-err'}">SQLite ${escapeHtml(storage.integrity)}</span>
+    <div class="storage-line">数据库：${escapeHtml(storage.database_path)}</div>
+    <div class="storage-line">自动备份：${storage.backup_count} 份 · 活跃事件：${storage.active_events} · 已撤销：${storage.archived_events}</div>
+    ${trusted ? '' : '<div class="artifact-warning">当前不是唯一数据源阶段，请继续保留原始投递记录。</div>'}`;
+}
+
+function renderQuickOutcomeCards() {
+  const groups = new Map();
+  resumeArtifacts.filter(item => item.source === 'delivery').forEach(item => {
+    const key = item.application_key || item.application_hint;
+    if (!groups.has(key)) groups.set(key, {label: item.application_hint, items: []});
+    groups.get(key).items.push(item);
+  });
+  if (!groups.size) {
+    document.getElementById('outcome-quick-cards').innerHTML = '<div class="storage-line">尚未发现“投递版本”PDF；仍可使用下方表单记录。</div>';
+    return;
+  }
+  const latestByApplication = new Map();
+  outcomeEvents.forEach(event => {
+    if (!latestByApplication.has(event.application)) latestByApplication.set(event.application, event);
+  });
+  const safeRank = {delivered_old: 0, candidate: 1, unverified: 2, discarded: 3};
+  const cards = [...groups.entries()].sort((a, b) => a[1].label.localeCompare(b[1].label, 'zh-CN')).map(([key, group]) => {
+    const items = group.items.sort((a, b) => (safeRank[a.state] - safeRank[b.state]) || b.modified_at.localeCompare(a.modified_at));
+    const selected = items[0];
+    const safeRef = ['unverified', 'discarded'].includes(selected.state) ? '' : selected.ref;
+    const current = latestByApplication.get(key);
+    const currentText = current ? `当前记录：${outcomeLabels[current.status] || current.status} · ${current.date}` : '尚无投递状态记录';
+    const warning = safeRef ? '' : '<div class="artifact-warning">最新文件被标记为未验证/废弃，快速记录不会关联该 PDF。</div>';
+    const buttons = ['applied', 'assessment', 'interview', 'offer', 'rejected'].map(status =>
+      `<button class="compact-button" data-application="${escapeHtml(key)}" data-status="${status}" data-resume="${escapeHtml(safeRef)}" onclick="quickRecordOutcome(this)">${outcomeLabels[status]}</button>`
+    ).join('');
+    return `<div class="quick-card"><h3>${escapeHtml(group.label)}</h3><div class="quick-current">${escapeHtml(currentText)}</div><p>${escapeHtml(selected.filename)}</p>${warning}<div class="actions">${buttons}</div></div>`;
+  });
+  document.getElementById('outcome-quick-cards').innerHTML = cards.join('');
+}
+
+function renderArchivedOutcomes() {
+  document.getElementById('archived-outcome-summary').textContent = `已撤销记录（${archivedOutcomeEvents.length}）`;
+  if (!archivedOutcomeEvents.length) {
+    document.getElementById('archived-outcomes-result').innerHTML = '<div class="storage-line">暂无已撤销记录</div>';
+    return;
+  }
+  let html = '<table><thead><tr><th>日期</th><th>申请</th><th>状态</th><th>操作</th></tr></thead><tbody>';
+  archivedOutcomeEvents.forEach(item => {
+    html += `<tr><td>${escapeHtml(item.date)}</td><td>${escapeHtml(item.application)}</td><td>${escapeHtml(outcomeLabels[item.status] || item.status)}</td><td><button class="compact-button" onclick="restoreOutcomeEvent('${escapeHtml(item.event_id)}')">恢复</button></td></tr>`;
+  });
+  document.getElementById('archived-outcomes-result').innerHTML = html + '</tbody></table>';
+}
+
 async function loadOutcomes() {
   showResult('outcomes-result', '加载中...', 'loading');
   try {
     const r = await api('/outcomes');
     outcomeEvents = r.events;
+    archivedOutcomeEvents = r.archived_events || [];
     renderOutcomeSummary(r.summary);
+    renderOutcomeStorage(r.storage);
+    renderQuickOutcomeCards();
+    renderArchivedOutcomes();
     if (!outcomeEvents.length) {
       showResult('outcomes-result', '暂无投递记录', '');
       return;
@@ -349,11 +459,47 @@ async function loadOutcomes() {
     outcomeEvents.forEach(item => {
       const digest = item.resume_sha256 ? item.resume_sha256.slice(0, 12) : '—';
       const pdf = item.resume_name ? `${escapeHtml(item.resume_name)}<br><small>${digest}</small>` : '—';
-      html += `<tr><td>${escapeHtml(item.date)}</td><td>${escapeHtml(item.application)}</td><td>${escapeHtml(outcomeLabels[item.status] || item.status)}</td><td>${pdf}</td><td>${escapeHtml(item.note)}</td><td><div class="actions"><button class="compact-button" onclick="editOutcome('${escapeHtml(item.event_id)}')">编辑</button><button class="compact-button danger-button" onclick="deleteOutcomeEvent('${escapeHtml(item.event_id)}')">删除</button></div></td></tr>`;
+      html += `<tr><td>${escapeHtml(item.date)}</td><td>${escapeHtml(item.application)}</td><td>${escapeHtml(outcomeLabels[item.status] || item.status)}</td><td>${pdf}</td><td>${escapeHtml(item.note)}</td><td><div class="actions"><button class="compact-button" onclick="editOutcome('${escapeHtml(item.event_id)}')">编辑</button><button class="compact-button danger-button" onclick="deleteOutcomeEvent('${escapeHtml(item.event_id)}')">撤销</button></div></td></tr>`;
     });
     html += '</tbody></table>';
     document.getElementById('outcomes-result').innerHTML = html;
   } catch (e) { showResult('outcomes-result', escapeHtml(e.message), 'status-err'); }
+}
+
+async function quickRecordOutcome(button) {
+  button.disabled = true;
+  try {
+    await api('/outcomes', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        application: button.dataset.application,
+        status: button.dataset.status,
+        date: localToday(),
+        resume_ref: button.dataset.resume || null,
+        note: ''
+      })
+    });
+    showResult('outcome-storage-result', `已记录“${escapeHtml(outcomeLabels[button.dataset.status])}”，并创建本地备份。`, 'status-ok');
+    await loadOutcomes();
+  } catch (e) {
+    showResult('outcome-storage-result', escapeHtml(e.message), 'status-err');
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function createOutcomeBackup() {
+  showResult('outcome-storage-result', '备份中...', 'loading');
+  try {
+    const r = await api('/outcomes/backups', {method: 'POST'});
+    showResult('outcome-storage-result', `备份已创建：${escapeHtml(r.backup_name)}`, 'status-ok');
+    await loadOutcomes();
+  } catch (e) { showResult('outcome-storage-result', escapeHtml(e.message), 'status-err'); }
+}
+
+function downloadOutcomeExport(format) {
+  window.location.href = `${API}/outcomes/export?format=${encodeURIComponent(format)}`;
 }
 
 async function saveOutcome() {
@@ -401,7 +547,7 @@ function resetOutcomeForm() {
   document.getElementById('outcome-event-id').value = '';
   document.getElementById('outcome-application').value = '';
   document.getElementById('outcome-status').value = 'applied';
-  document.getElementById('outcome-date').value = new Date().toISOString().slice(0, 10);
+  document.getElementById('outcome-date').value = localToday();
   document.getElementById('outcome-resume').value = '';
   document.getElementById('outcome-note').value = '';
   document.getElementById('outcome-form-title').textContent = '记录投递结果';
@@ -410,12 +556,20 @@ function resetOutcomeForm() {
 }
 
 async function deleteOutcomeEvent(eventId) {
-  if (!confirm('确定删除这条投递记录？该操作不会删除简历 PDF。')) return;
+  if (!confirm('确定撤销这条投递记录？记录会进入“已撤销”，可以恢复；简历 PDF 不会被删除。')) return;
   try {
     await api(`/outcomes/${encodeURIComponent(eventId)}`, {method: 'DELETE'});
     if (document.getElementById('outcome-event-id').value === eventId) resetOutcomeForm();
     await loadOutcomes();
   } catch (e) { showResult('outcomes-result', escapeHtml(e.message), 'status-err'); }
+}
+
+async function restoreOutcomeEvent(eventId) {
+  try {
+    await api(`/outcomes/${encodeURIComponent(eventId)}/restore`, {method: 'POST'});
+    showResult('outcome-storage-result', '已恢复投递记录。', 'status-ok');
+    await loadOutcomes();
+  } catch (e) { showResult('outcome-storage-result', escapeHtml(e.message), 'status-err'); }
 }
 
 async function loadTrends() {

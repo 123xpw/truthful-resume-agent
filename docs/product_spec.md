@@ -89,6 +89,10 @@ Tracks company, job title, JD, generated draft, manual edits, and final decision
   authorization, or delivery write access.
 - Dependency failures produce bounded retries, explicit degradation, or a
   fail-closed response rather than an unverified answer.
-- The local Web UI records, edits, and deletes application outcome events
+- The local Web UI records, edits, archives, and restores application outcome events
   without an LLM call, and may bind an event only to PDFs under the configured
   output or delivery roots.
+- Outcome persistence uses a local versioned SQLite schema. Mutations are
+  audited and backed up; user deletion is a reversible archive operation.
+- The dashboard exposes `preview`, `pilot`, and `trusted` data modes. Preview is
+  not represented as the sole authoritative copy of real application history.
