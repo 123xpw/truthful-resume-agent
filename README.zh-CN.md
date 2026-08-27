@@ -273,6 +273,14 @@ RESUME_AGENT_FEISHU_TIMEOUT_SECONDS=10
 
 Agent 回归集包含 24 个固定场景，覆盖有证据/无证据问题、verifier 修正、非法 verifier 输出和有界 fail-closed 路由。独立 runtime/API 测试覆盖 SQLite 持久化、会话隔离、重试、依赖故障、trace 隐私和 HTTP 契约。
 
+面试前可用无 API Key 的 scripted-provider 演示一次性查看成功回答、verifier 耗尽阻断和 LLM timeout 结构化错误：
+
+```bash
+.venv/bin/python -m backend.resume_agent.agent_demo
+```
+
+它演示的是 Agent 编排与故障边界，不是模型质量评测。
+
 <details>
 <summary><strong>运行评测命令</strong></summary>
 

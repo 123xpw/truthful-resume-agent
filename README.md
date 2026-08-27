@@ -346,6 +346,16 @@ queries, verifier repair, malformed verifier output, and bounded fail-closed
 routing. Runtime/API tests separately cover SQLite persistence, cross-session
 isolation, retries, dependency failures, trace privacy, and HTTP contracts.
 
+Before an interview, run the scripted-provider demo to inspect a successful
+answer, verifier-exhaustion block, and structured LLM-timeout error without an
+API key:
+
+```bash
+.venv/bin/python -m backend.resume_agent.agent_demo
+```
+
+It demonstrates Agent orchestration and failure boundaries, not model quality.
+
 <details>
 <summary><strong>Run the evaluation commands</strong></summary>
 

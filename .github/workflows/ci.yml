@@ -73,6 +73,9 @@ jobs:
       - name: Run fixed Agent regression cases
         run: python -m backend.resume_agent.agent_eval
 
+      - name: Run offline Agent control-path demo
+        run: python -m backend.resume_agent.agent_demo
+
       - name: Rebuild matcher evaluation
         run: python -m backend.resume_agent.eval_matchers --output /tmp/matcher_report.md
 

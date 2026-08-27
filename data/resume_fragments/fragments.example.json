@@ -154,17 +154,17 @@
     "organization": "",
     "url_text": "GitHub: truthful-resume-agent",
     "url": "https://github.com/123xpw/truthful-resume-agent",
-    "keywords": "Python, LangChain, LangGraph, 工具调用, RAG, Qdrant, fastembed, FastAPI, DeepSeek API",
+    "keywords": "Python, FastAPI, LangChain, LangGraph, Agent, Tool Calling / Function Calling, RAG, Qdrant, fastembed, SQLite, DeepSeek API",
     "bullets": {
       "A": [
-        "\\textbf{Agent 闭环：}基于 LangChain + LangGraph 构建「检索→生成→校验→反思」StateGraph，支持 search\\_facts / verify\\_fact 工具调用与最多 3 次反思重试；FastAPI Runtime 以 UUID 隔离会话、SQLite checkpoint 持久化状态，并记录脱敏节点 trace。",
-        "\\textbf{双路检索与评估：}构建 keyword + Qdrant 语义检索双路召回，以 4 个 JD × 11 条 fact 完整审计标签对比；semantic 的宏平均有用召回由 80\\% 升至 88\\%，有用精度由 64\\% 降至 56\\%，且数据岗出现无关误召，据此保持 semantic opt-in。",
-        "\\textbf{门控与工程化：}以 FastAPI 提供 Web UI、CLI 提供 analyze / gap-check / career-trends 命令，事实库为唯一真值源，生成前用 fact\\_id 溯源 + 边界检查拦截无事实依据或过度包装的内容。"
+        "\\textbf{Agent 工作流与任务编排：}基于 FastAPI + LangChain + LangGraph 实现只读事实问答 Agent，将「检索→生成→校验→反思」建模为显式 StateGraph；通过 UUID 会话、SQLite checkpoint 与节点级 trace 支持状态隔离、恢复和调用追踪。",
+        "\\textbf{RAG 检索与事实约束：}实现 search\\_facts / verify\\_fact 工具调用与 keyword + Qdrant（fastembed）双路检索；按结构化事实建立向量索引，通过 fact\\_id、事实边界和 fail-closed 校验阻断无证据措辞，并为 LLM 超时与工具异常提供有限重试和结构化错误。",
+        "\\textbf{评测与策略决策：}以 4 个 JD × 11 条 fact 完整审计标签对比 keyword 与 Qdrant；semantic 宏平均有用召回由 80\\% 升至 88\\%，有用精度由 64\\% 降至 56\\%，且数据岗出现无关误召，因此保持为 opt-in 策略。"
       ],
       "B": [
-        "\\textbf{对话 Agent：}基于 LangChain + LangGraph 串联检索、生成、校验、反思四节点，用工具调用查询事实库；FastAPI Runtime 以 UUID 隔离会话，并用本地 SQLite checkpoint 保存状态。",
-        "\\textbf{双路检索与评估：}构建 keyword + Qdrant 语义检索双路召回，在 4 个 JD 上对比审计标签后保持 semantic opt-in。",
-        "\\textbf{门控与工程化：}通过 FastAPI Web UI 与 CLI 提供 JD 分析和缺口追踪，生成前用 fact\\_id 溯源与边界检查过滤过度包装的输出。"
+        "\\textbf{Agent 工作流：}基于 FastAPI + LangChain + LangGraph 实现只读事实问答 Agent，以 UUID 会话、SQLite checkpoint 与节点 trace 支持状态隔离、恢复和调用追踪。",
+        "\\textbf{RAG 与事实约束：}实现 keyword + Qdrant（fastembed）双路检索及 search\\_facts / verify\\_fact 工具调用，通过 fact\\_id、事实边界和 fail-closed 校验阻断无证据措辞。",
+        "\\textbf{评测与策略决策：}在 4 个 JD × 11 条 fact 完整审计标签上对比 keyword 与 Qdrant，根据召回增益和明确误召保持 semantic opt-in。"
       ]
     }
   },
