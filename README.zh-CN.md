@@ -5,11 +5,13 @@
 [![CI](https://github.com/123xpw/truthful-resume-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/123xpw/truthful-resume-agent/actions/workflows/ci.yml)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
 
-**一套基于事实证据的本地流程，用于把岗位描述（JD）转化为可辩护、可溯源的简历。**
+**一个将简历辅助限制在明确、可溯源事实边界内的本地工程原型。**
 
 DeepSeek 可以解读 JD、排序已授权素材并提出修改建议；确定性代码保护事实和交付路径，候选人始终是唯一的措辞授权者。
 
 > **当前成熟度：** CLI 已是可独立使用的本地 MVP；Web 目前是诊断看板，还不能完整替代 CLI。系统刻意不允许 Agent 代替候选人批准简历声明。
+
+项目起源于个人秋招：每次模型对话都重复粘贴同一份经历会浪费上下文，模型记忆和事实约束也不稳定。它不宣称预测筛选结果或提高简历通过率；项目收敛后的问题是：当 LLM 解释私人履历事实时，如何让证据、状态与失败可见。
 
 ## 控制模型
 
@@ -18,6 +20,10 @@ DeepSeek 可以解读 JD、排序已授权素材并提出修改建议；确定�
 | 解读 JD、暴露 red flag、提出只供审阅的措辞、排序合格 fragment ID | 校验来源、阻断无证据术语、执行哈希门禁、限制选材、审计溯源 | 批准准确的 A/B 措辞、确认手工 bullet 溯源、决定是否投递 |
 
 系统刻意把事实证据、措辞授权、JD 适配和最终交付拆开，不允许一个 prompt 把这些决定合并成一次模型输出。
+
+### 为什么需要 Agent，为什么使用 LangGraph？
+
+固定的 `prepare -> authorize -> finalize -> deliver` 不需要 Agent。Agent 只用于开放式、多轮的事实问答，用户可以继续追问证据或要求修复上一轮回答。LangChain 只提供可替换的消息、模型和工具适配；LangGraph 将 `retrieve -> generate -> verify -> reflect` 的状态、条件修复、checkpoint 和节点 trace 显式化。当前状态图规模不大，纯 Python 状态机也能完成；框架选择是实现取舍，不是项目价值或生产就绪证明。
 
 ## 五分钟开始：无需 API Key
 
@@ -230,6 +236,26 @@ LLM 输出只是建议。它可以辅助修改简历，但不能更新事实、�
 
 > **数据边界：** 启用 LLM 后，JD、召回的事实摘要与边界、对话内容或简历文本可能发送给所配置的模型服务商。系统不会自动脱敏这些输入。需要完全本地处理时，请使用 `--no-llm` 和默认确定性选材。
 
+## 飞书投递主台账（可选，只读）
+
+Web 把飞书电子表格作为日常投递主台账，并将授权范围保存为本地版本化快照。当前实现只读取飞书，不回写单元格、不调用 LLM；相同内容不会重复创建快照。
+
+先在飞书开放平台创建企业自建应用，只开通电子表格只读权限，并让该应用获得目标表格的协作者访问。随后把以下配置写入被 Git 忽略的本地 `.env`：
+
+```dotenv
+RESUME_AGENT_FEISHU_SPREADSHEET_URL=https://example.feishu.cn/sheets/REPLACE_ME
+RESUME_AGENT_FEISHU_APP_ID=
+RESUME_AGENT_FEISHU_APP_SECRET=
+# 可留空，系统会选择第一个可见工作表。
+RESUME_AGENT_FEISHU_SHEET_ID=
+RESUME_AGENT_FEISHU_RANGE=A1:Z500
+RESUME_AGENT_FEISHU_TIMEOUT_SECONDS=10
+```
+
+打开网页后会先展示最近一次本地快照，再在后台只读同步飞书；也可以手动刷新。同步失败不会清空上次成功数据。数据库只保存去除尾部空行/空列后的表格内容快照、来源版本和同步时间，不保存 App Secret 或 `tenant_access_token`。令牌只在当前服务进程的内存中复用，并在临近到期或被飞书拒绝时刷新；被拒绝后最多重试一次。
+
+主页面是单一“求职投递分析”：显示进行中、笔试、高优先级进行中和待投递四项指标，以及状态分布、优先级×阶段和最多5条确定性“今日关注”。完整明细继续在飞书查看；网页不复制原表、不重复录入状态，也不展示本地申请/PDF关联和数据库维护控件。旧关联与 outcome API 暂时保留为实验/兼容能力，但不进入日常页面。飞书始终是投递状态的权威来源。
+
 ## 评测
 
 当前匹配器报告基于完整的 4 JD x 11 facts 审计矩阵：
@@ -242,6 +268,8 @@ LLM 输出只是建议。它可以辅助修改简历，但不能更新事实、�
 语义检索提高了召回率，但降低了精度，并在数据岗样例中选中一条无关事实。因此它继续保持 opt-in，且不能决定某段经历是否存在。详见 [`data/evaluation/matcher_report.md`](data/evaluation/matcher_report.md)。
 
 检索回归集使用 10 条固定 query，同时运行 keyword baseline 和真实的 embedded-Qdrant `query_points` 路径。在当前脱敏事实上，keyword Recall@5 为 0.50，Qdrant semantic Recall@5 为 1.00、MRR 为 0.80。该小型数据集只是回归基线，不是生产 benchmark 或简历成绩。
+
+另一组私有单次决策实验在 5 份不同方向的目标 JD、11 条事实上，对比完整结构化事实上下文与 Agent 实际使用的 keyword top-5。完整上下文找回 29/31 条 useful 标签（93.5%），keyword 为 14/31（45.2%）；有用精度几乎相同（70.7% 对 70.0%）。代价是平均提示长度约翻倍（1.45 万对 0.74 万字符），且该轮延迟更高（6.2 秒对 3.8 秒）。结果支持将完整上下文作为当前小事实库的基线，但不支持让模型不受限制地选材：模型会选入更多边缘素材，仍需确定性边界。私有 JD、事实、prompt 和输出全部保持在 Git 之外；这是方案选择证据，不是统计 benchmark 或通过率结论。
 
 Agent 回归集包含 24 个固定场景，覆盖有证据/无证据问题、verifier 修正、非法 verifier 输出和有界 fail-closed 路由。独立 runtime/API 测试覆盖 SQLite 持久化、会话隔离、重试、依赖故障、trace 隐私和 HTTP 契约。
 
@@ -279,6 +307,8 @@ Agent 回归集包含 24 个固定场景，覆盖有证据/无证据问题、ver
 .venv/bin/python -m backend.resume_agent.agent.test_agent
 .venv/bin/python -m backend.resume_agent.agent.test_runtime
 .venv/bin/python -m backend.resume_agent.test_outcomes
+.venv/bin/python -m backend.resume_agent.test_feishu_sync
+.venv/bin/python -m backend.resume_agent.test_feishu_links
 .venv/bin/python -m backend.resume_agent.agent_eval
 .venv/bin/python -m backend.resume_agent.eval_matchers
 .venv/bin/python -m backend.resume_agent.rag_eval
@@ -307,13 +337,13 @@ Smoke 同时支持私有运行文件名和公开 `*.example.json` 回退数据�
 docker compose up --build
 ```
 
-在 macOS 完成本地环境安装后，可直接双击 `启动投递看板.command`；需要关闭后台服务时双击 `停止投递看板.command`。
+在 macOS 完成本地环境安装后，可直接双击 `启动投递看板.command`；启动器会安全重启自己管理的旧进程并启用本地代码热重载，避免新页面连接旧 API。需要关闭后台服务时双击 `停止投递看板.command`。
 
-打开 <http://127.0.0.1:8000> 查看 JD 分析、申请状态、本地投递看板、缺口趋势、mastery 历史和面试反馈。投递看板可记录和修改状态事件，以可恢复的“撤销”代替物理删除，并可关联允许目录中的实际 PDF 及其 SHA256；“投递版本”卡片支持一键更新状态。这些操作不调用 LLM。打开 <http://127.0.0.1:8000/docs> 查看 API 契约。Docker 会从构建上下文排除私有运行文件；基础 Compose 不接收 Key，只有可选且被 Git 忽略的 override 会在运行时注入。Named volume 保存 checkpoint、投递事件和索引。当前 MVP 的授权、最终生成、AEO 和最终简历登记仍使用 CLI。
+打开 <http://127.0.0.1:8000> 查看可选的个人“求职投递分析”；它是求职运营扩展，不是 Agent 核心流程。页面会先校验 API 契约，立即展示最近一次本地快照，再后台同步飞书；发现旧后台时要求重启而不是继续提交。主页面不复制原始投递表，也不展示本地结果录入、PDF 关联或实验时间线。独立的 <http://127.0.0.1:8000/job-analysis> 会逐条展示岗位要求、fact ID、事实边界和不可写项；本次预览不保存 JD、不调用 LLM，也不把“存在支持点”解释为完整满足整条复合要求。静态的 <http://127.0.0.1:8000/project-review> 不读取私有输入，用于复习项目动机、框架取舍、上下文对照实验、工程教训与面试边界。打开 <http://127.0.0.1:8000/docs> 查看 API 契约。Docker 会从构建上下文排除私有运行文件；基础 Compose 不接收 Key，只有可选且被 Git 忽略的 override 会在运行时注入。Named volume 保存 checkpoint、投递事件和索引。当前 MVP 的授权、最终生成、AEO 和最终简历登记仍使用 CLI。
 
-投递状态保存在本地 SQLite。第一次打开时会一次性导入旧的、被 Git 忽略的 `application_outcomes.json`，且不会修改原文件。每次数据变更都会产生滚动备份；网页同时显示数据库完整性、数据模式，并提供记录恢复和 JSON/CSV 导出。默认是 `preview`：在备份恢复和 Pilot 验证完成前，真实投递记录仍需保留另一份副本。数据库、备份、PDF 和旧 JSON 都不会进入 Git 或公开 Docker 镜像。
+兼容 outcome API 的状态保存在本地 SQLite。第一次访问相关 API 时会一次性导入旧的、被 Git 忽略的 `application_outcomes.json`，且不会修改原文件。备份、恢复与导出能力仍存在，但不展示在驾驶舱中。数据库、备份、PDF 和旧 JSON 都不会进入 Git 或公开 Docker 镜像。
 
-设计细节见 [`docs/technical_design.md`](docs/technical_design.md)、[`docs/risk_policy.md`](docs/risk_policy.md) 和 [`docs/evaluation_plan.md`](docs/evaluation_plan.md)。
+设计细节见 [`docs/technical_design.md`](docs/technical_design.md)、[`docs/risk_policy.md`](docs/risk_policy.md) 和 [`docs/evaluation_plan.md`](docs/evaluation_plan.md)。面试讲解与诚实边界示例见 [`docs/interview_case_study.zh-CN.md`](docs/interview_case_study.zh-CN.md)。
 
 ## License
 

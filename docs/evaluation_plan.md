@@ -44,6 +44,45 @@ Current reproducible baseline uses a complete 4-JD x 11-fact label matrix:
 - Semantic retrieval remains opt-in because the data-role sample contains an
   irrelevant selection.
 
+The maintainer also keeps a private, frozen target-domain v2 audit outside Git:
+
+- 22 unique target JDs frozen on 2026-08-27 across 10 role families.
+- 11 current private facts and 242 complete JD/fact relevance labels.
+- Keyword macro useful precision / recall: 68% / 71%; zero explicitly
+  irrelevant selections and two zero-result JDs.
+- Semantic macro useful precision / recall: 67% / 76%; four explicitly
+  irrelevant selections and one zero-result JD.
+
+This local result supports semantic as an opt-in recall aid rather than the
+default selector. It is an attributed engineering regression set, not candidate
+ground truth or a production benchmark. The private cohort manifest, labels,
+report, and source JDs remain Git-ignored; the public 4-JD baseline stays the
+clean-clone reproducibility contract. Old and v2 metrics must never be combined
+under one sample-size claim.
+
+#### Small-bank context strategy decision
+
+A separate private single-run experiment asks whether retrieval is justified
+at the current scale rather than assuming it is. Five diverse target JDs were
+run once with the same model and output contract under two evidence modes:
+
+- all 11 structured facts, including summaries and boundaries;
+- the conversational Agent's actual deterministic keyword top-5 bundle.
+
+Full context selected 29 of 31 useful labels (93.5%) and keyword top-5 selected
+14 (45.2%). Useful precision was 70.7% versus 70.0%; useful-or-marginal
+precision was 100% versus 95%. Full context averaged 14.5k prompt characters
+and 6.2 seconds, versus 7.4k characters and 3.8 seconds for keyword in that
+run. Character counts are not token counts, and latency is environment-specific.
+
+The decision is to treat full context as the stronger baseline while the bank
+contains only 11 facts. It does not authorize unrestricted model selection:
+full context selected substantially more marginal material and sometimes
+overstated relevance strength. Private JDs, facts, generated claims, hashes,
+and the raw report remain ignored under `context_strategy_*`. This experiment
+is a design aid, not a repeated statistical benchmark or screening-outcome
+claim.
+
 ### 3. Risk Control
 
 Question: Does the system identify interview risks before resume submission?

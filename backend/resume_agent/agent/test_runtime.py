@@ -255,6 +255,7 @@ def test_semantic_retrieval_has_explicit_degradation() -> None:
     web_module = importlib.import_module("backend.resume_agent.web.app")
     original_analyze = web_module.analyze_jd
     original_save = web_module.save_jd_memory
+    original_setting = os.environ.get("RESUME_AGENT_WEB_SEMANTIC_ENABLED")
 
     def failing_semantic(jd_text: str, matcher: str = "keyword"):
         if matcher == "semantic":
@@ -262,6 +263,7 @@ def test_semantic_retrieval_has_explicit_degradation() -> None:
         return original_analyze(jd_text, matcher="keyword")
 
     with TemporaryDirectory(prefix="resume-agent-api-") as temp_dir:
+        os.environ["RESUME_AGENT_WEB_SEMANTIC_ENABLED"] = "1"
         web_module.analyze_jd = failing_semantic
         web_module.save_jd_memory = lambda *_args, **_kwargs: Path(temp_dir) / "jd.md"
         try:
@@ -291,6 +293,74 @@ def test_semantic_retrieval_has_explicit_degradation() -> None:
         finally:
             web_module.analyze_jd = original_analyze
             web_module.save_jd_memory = original_save
+            if original_setting is None:
+                os.environ.pop("RESUME_AGENT_WEB_SEMANTIC_ENABLED", None)
+            else:
+                os.environ["RESUME_AGENT_WEB_SEMANTIC_ENABLED"] = original_setting
+
+
+def test_web_semantic_cold_start_is_blocked_before_model_call() -> None:
+    web_module = importlib.import_module("backend.resume_agent.web.app")
+    original_analyze = web_module.analyze_jd
+    original_save = web_module.save_jd_memory
+    original_setting = os.environ.get("RESUME_AGENT_WEB_SEMANTIC_ENABLED")
+    os.environ["RESUME_AGENT_WEB_SEMANTIC_ENABLED"] = "0"
+    called_matchers: list[str] = []
+
+    def tracked_analyze(jd_text: str, matcher: str = "keyword"):
+        called_matchers.append(matcher)
+        if matcher == "semantic":
+            raise AssertionError("Web request attempted a semantic cold start")
+        return original_analyze(jd_text, matcher="keyword")
+
+    with TemporaryDirectory(prefix="resume-agent-web-cold-start-") as temp_dir:
+        web_module.analyze_jd = tracked_analyze
+        web_module.save_jd_memory = lambda *_args, **_kwargs: Path(temp_dir) / "jd.md"
+        try:
+            with TestClient(app) as client:
+                degraded = client.post(
+                    "/api/analyze",
+                    json={"jd_text": "Python REST API", "name": "cold-start", "matcher": "semantic"},
+                )
+                payload = degraded.json()
+                _assert(degraded.status_code == 200, "disabled semantic did not fall back")
+                _assert(payload["warnings"][0]["code"] == "WEB_SEMANTIC_NOT_ENABLED", "cold-start warning missing")
+                _assert(called_matchers == ["keyword"], "semantic model was invoked from the Web request")
+                blocked = client.post(
+                    "/api/analyze",
+                    json={
+                        "jd_text": "Python REST API",
+                        "name": "cold-start-blocked",
+                        "matcher": "semantic",
+                        "fallback_to_keyword": False,
+                    },
+                )
+                _assert(blocked.status_code == 503, "explicit no-fallback request was not blocked")
+        finally:
+            web_module.analyze_jd = original_analyze
+            web_module.save_jd_memory = original_save
+            if original_setting is None:
+                os.environ.pop("RESUME_AGENT_WEB_SEMANTIC_ENABLED", None)
+            else:
+                os.environ["RESUME_AGENT_WEB_SEMANTIC_ENABLED"] = original_setting
+
+
+def test_web_contract_exposes_dashboard_only() -> None:
+    with TestClient(app) as client:
+        metadata = client.get("/api/meta")
+        page = client.get("/")
+        review_page = client.get("/project-review")
+    _assert(metadata.status_code == 200, "API metadata endpoint failed")
+    _assert(metadata.json()["contract_version"] == "2026-08-26.2", "API contract version mismatch")
+    _assert("EXPECTED_API_CONTRACT = '2026-08-26.2'" in page.text, "UI contract check missing")
+    _assert("求职投递分析" in page.text and "syncFromFeishu(false)" in page.text, "dashboard bootstrap missing")
+    _assert("controller.abort(), 20000" in page.text, "Feishu client timeout missing")
+    _assert(review_page.status_code == 200, "project review page failed")
+    _assert("Agent 工程决策与复盘" in review_page.text, "project review title missing")
+    _assert("93.5%" in review_page.text and "45.2%" in review_page.text, "context experiment decision missing")
+    _assert("/project-review" in page.text, "dashboard does not link to project review")
+    for removed_control in ('id="analyze-jd"', 'id="feishu-link-sequence"', 'id="outcome-form-title"'):
+        _assert(removed_control not in page.text, f"legacy control remained visible: {removed_control}")
 
 
 ALL_TESTS = [
@@ -306,6 +376,8 @@ ALL_TESTS = [
     test_fact_tool_failure_fails_closed,
     test_fastapi_agent_contract,
     test_semantic_retrieval_has_explicit_degradation,
+    test_web_semantic_cold_start_is_blocked_before_model_call,
+    test_web_contract_exposes_dashboard_only,
 ]
 
 

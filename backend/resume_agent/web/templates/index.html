@@ -3,625 +3,335 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Truthful Resume Agent</title>
+<title>求职投递分析</title>
 <style>
   :root {
-    --accent: #2F5597;
-    --text: #202124;
-    --muted: #555555;
-    --border: #D8DDE6;
-    --bg: #f8f9fa;
-    --card: #ffffff;
-    --danger: #c0392b;
-    --success: #27ae60;
-    --warning: #e67e22;
+    --ink: #172033;
+    --muted: #667085;
+    --line: #e5e9f0;
+    --surface: #ffffff;
+    --canvas: #f5f7fb;
+    --navy: #173b73;
+    --blue: #3478f6;
+    --cyan: #39a7c8;
+    --green: #278f67;
+    --amber: #d58a20;
+    --red: #c4544d;
+    --purple: #7656b8;
   }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: -apple-system, "PingFang SC", "Noto Sans CJK SC", sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
-  header { background: var(--accent); color: white; padding: 1rem 2rem; }
-  header h1 { font-size: 1.4rem; }
-  header p { font-size: 0.85rem; opacity: 0.85; }
-  .container { max-width: 1100px; margin: 0 auto; padding: 1.5rem; }
-  .tabs { display: flex; gap: 0.5rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
-  .tab { padding: 0.5rem 1rem; background: var(--card); border: 1px solid var(--border); border-radius: 6px; cursor: pointer; font-size: 0.9rem; }
-  .tab.active { background: var(--accent); color: white; border-color: var(--accent); }
-  .panel { display: none; }
-  .panel.active { display: block; }
-  .card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem; margin-bottom: 1rem; }
-  .card h2 { font-size: 1.1rem; margin-bottom: 1rem; color: var(--accent); }
-  textarea { width: 100%; min-height: 120px; padding: 0.75rem; border: 1px solid var(--border); border-radius: 6px; font-family: monospace; font-size: 0.85rem; resize: vertical; }
-  input[type="text"], input[type="date"], select { width: 100%; padding: 0.5rem; border: 1px solid var(--border); border-radius: 6px; font-size: 0.9rem; background: white; }
-  button { background: var(--accent); color: white; border: none; padding: 0.5rem 1.2rem; border-radius: 6px; cursor: pointer; font-size: 0.9rem; }
-  button:hover { opacity: 0.9; }
-  button:disabled { opacity: 0.5; cursor: not-allowed; }
-  pre { background: var(--bg); padding: 1rem; border-radius: 6px; overflow-x: auto; font-size: 0.82rem; white-space: pre-wrap; word-break: break-word; max-height: 500px; overflow-y: auto; }
-  .badge { display: inline-block; padding: 0.15rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: 600; }
-  .badge-high { background: #fadbd8; color: var(--danger); }
-  .badge-low { background: #fef9e7; color: var(--warning); }
-  table { width: 100%; border-collapse: collapse; }
-  th, td { text-align: left; padding: 0.5rem; border-bottom: 1px solid var(--border); font-size: 0.85rem; }
-  th { color: var(--muted); font-weight: 600; }
-  .row { display: flex; gap: 1rem; flex-wrap: wrap; }
-  .row > * { flex: 1; min-width: 200px; }
-  .status-msg { padding: 0.75rem; border-radius: 6px; margin: 0.5rem 0; font-size: 0.85rem; }
-  .status-ok { background: #eafaf1; color: var(--success); }
-  .status-err { background: #fadbd8; color: var(--danger); }
-  .loading { color: var(--muted); font-style: italic; }
-  .token-note { padding: 0.75rem 1rem; margin-bottom: 1rem; background: #eef4ff; color: #214b85; border-left: 4px solid var(--accent); border-radius: 6px; font-size: 0.85rem; }
-  .stats-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.75rem; margin-bottom: 1rem; }
-  .stat-card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; }
-  .stat-value { font-size: 1.5rem; font-weight: 700; color: var(--accent); }
-  .stat-label { color: var(--muted); font-size: 0.8rem; }
-  .small-note { min-height: 72px; font-family: inherit; }
-  .actions { display: flex; gap: 0.4rem; flex-wrap: wrap; }
-  .secondary-button { background: #687386; }
-  .danger-button { background: var(--danger); }
-  .compact-button { padding: 0.3rem 0.65rem; font-size: 0.78rem; }
-  .artifact-warning { color: var(--warning); font-size: 0.8rem; margin-top: 0.35rem; }
-  .storage-card { border-left: 4px solid var(--warning); }
-  .storage-card.trusted { border-left-color: var(--success); }
-  .storage-line { color: var(--muted); font-size: 0.8rem; overflow-wrap: anywhere; }
-  .mode-badge { display: inline-block; padding: 0.15rem 0.55rem; border-radius: 999px; background: #fff3e0; color: #9a4d00; font-size: 0.75rem; font-weight: 700; }
-  .mode-badge.trusted { background: #eafaf1; color: var(--success); }
-  .quick-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem; }
-  .quick-card { border: 1px solid var(--border); border-radius: 8px; padding: 1rem; background: #fbfcfe; }
-  .quick-card h3 { font-size: 0.95rem; margin-bottom: 0.25rem; }
-  .quick-card p { color: var(--muted); font-size: 0.78rem; margin-bottom: 0.65rem; overflow-wrap: anywhere; }
-  .quick-current { font-size: 0.78rem; color: var(--accent); margin-bottom: 0.55rem; }
-  details { margin-top: 1rem; }
-  summary { cursor: pointer; color: var(--muted); font-size: 0.85rem; }
-  @media (max-width: 760px) {
-    .container { padding: 1rem; }
-    .stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    .quick-grid { grid-template-columns: 1fr; }
-    table { display: block; overflow-x: auto; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--canvas); color: var(--ink); font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Noto Sans CJK SC", sans-serif; line-height: 1.55; }
+  button, a { font: inherit; }
+  .hero { color: white; background: linear-gradient(118deg, #102f61 0%, #1d4f8e 58%, #246a9a 100%); padding: 2.25rem max(1.25rem, calc((100vw - 1180px) / 2)); }
+  .eyebrow { margin: 0 0 0.35rem; font-size: 0.72rem; font-weight: 800; letter-spacing: 0.14em; opacity: 0.68; }
+  h1 { margin: 0; font-size: clamp(1.75rem, 4vw, 2.55rem); line-height: 1.18; }
+  .hero-title-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
+  .hero-copy { margin: 0.55rem 0 1.35rem; max-width: 720px; font-size: 0.93rem; opacity: 0.82; }
+  .sync-strip { display: flex; align-items: center; gap: 0.7rem; flex-wrap: wrap; padding: 0.72rem 0.85rem; border: 1px solid rgba(255,255,255,0.18); border-radius: 12px; background: rgba(255,255,255,0.09); backdrop-filter: blur(8px); }
+  .sync-dot { width: 0.58rem; height: 0.58rem; border-radius: 50%; flex: 0 0 auto; background: #b8c1d1; box-shadow: 0 0 0 4px rgba(255,255,255,0.08); }
+  .sync-dot.ok { background: #5de0a4; }
+  .sync-dot.loading { background: #ffd36a; animation: pulse 1.2s infinite; }
+  .sync-dot.error { background: #ff837c; }
+  @keyframes pulse { 50% { opacity: 0.45; } }
+  #sync-summary { flex: 1 1 360px; min-width: 220px; font-size: 0.86rem; }
+  .action { display: inline-flex; align-items: center; justify-content: center; min-height: 36px; padding: 0.42rem 0.78rem; border-radius: 8px; border: 1px solid rgba(255,255,255,0.25); color: white; background: rgba(255,255,255,0.1); text-decoration: none; cursor: pointer; }
+  .action:hover { background: rgba(255,255,255,0.17); }
+  .action:disabled { opacity: 0.45; cursor: not-allowed; }
+  main { width: min(1180px, calc(100% - 2rem)); margin: -0.35rem auto 2.5rem; }
+  .system-banner { display: none; margin: 1rem 0; padding: 0.9rem 1rem; border: 1px solid #f1bbb7; border-radius: 10px; color: #9e342e; background: #fff0ef; }
+  .notice { display: none; margin: 1rem 0 0; padding: 0.75rem 0.9rem; border-radius: 10px; font-size: 0.85rem; }
+  .notice.error { display: block; color: #9e342e; background: #fff0ef; border: 1px solid #f1bbb7; }
+  .notice.ok { display: block; color: #176846; background: #eaf8f1; border: 1px solid #bde6d1; }
+  .metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.85rem; margin: 1.25rem 0; }
+  .metric, .card { border: 1px solid var(--line); background: var(--surface); box-shadow: 0 8px 24px rgba(25,49,84,0.05); }
+  .metric { border-radius: 14px; padding: 1.05rem 1.1rem; }
+  .metric-value { font-size: 1.85rem; font-weight: 780; line-height: 1.1; color: var(--navy); }
+  .metric-label { margin-top: 0.3rem; color: var(--muted); font-size: 0.82rem; }
+  .dashboard-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1rem; }
+  .card { border-radius: 16px; padding: 1.25rem; }
+  .card h2 { margin: 0; font-size: 1.03rem; }
+  .card-subtitle { margin: 0.25rem 0 1.05rem; color: var(--muted); font-size: 0.78rem; }
+  .stage-row { display: grid; grid-template-columns: 92px minmax(0, 1fr) 32px; align-items: center; gap: 0.65rem; margin: 0.72rem 0; }
+  .stage-name { color: #344054; font-size: 0.82rem; }
+  .bar-track { height: 11px; overflow: hidden; border-radius: 999px; background: #edf1f6; }
+  .bar-fill { height: 100%; min-width: 3px; border-radius: inherit; transition: width 0.35s ease; }
+  .stage-count { text-align: right; font-weight: 750; font-size: 0.83rem; }
+  .priority-row { margin: 0.72rem 0 0.95rem; }
+  .priority-label { display: flex; justify-content: space-between; gap: 1rem; margin-bottom: 0.35rem; color: #344054; font-size: 0.8rem; }
+  .stack { display: flex; height: 14px; overflow: hidden; border-radius: 999px; background: #edf1f6; }
+  .segment { min-width: 0; height: 100%; }
+  .legend { display: flex; flex-wrap: wrap; gap: 0.85rem; margin-top: 1rem; color: var(--muted); font-size: 0.74rem; }
+  .legend span::before { content: ""; display: inline-block; width: 0.55rem; height: 0.55rem; margin-right: 0.32rem; border-radius: 2px; vertical-align: -0.03rem; background: var(--legend-color); }
+  .focus-card { grid-column: 1 / -1; }
+  .focus-list { display: grid; gap: 0.65rem; }
+  .focus-item { display: grid; grid-template-columns: 36px minmax(0, 1fr) minmax(220px, 0.7fr); gap: 0.85rem; align-items: center; padding: 0.88rem; border: 1px solid var(--line); border-radius: 12px; background: #fbfcfe; }
+  .focus-rank { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 10px; color: var(--navy); background: #eaf1fc; font-weight: 800; }
+  .focus-title { font-size: 0.9rem; font-weight: 720; overflow-wrap: anywhere; }
+  .focus-meta { display: flex; flex-wrap: wrap; gap: 0.38rem; margin-top: 0.35rem; color: var(--muted); font-size: 0.75rem; }
+  .pill { padding: 0.08rem 0.42rem; border-radius: 999px; background: #eef2f7; }
+  .pill.high { color: #9e342e; background: #fff0ef; }
+  .focus-action { padding-left: 0.85rem; border-left: 3px solid #cfe0f8; color: #344054; font-size: 0.82rem; }
+  .focus-action strong { display: block; margin-bottom: 0.18rem; color: var(--navy); font-size: 0.72rem; letter-spacing: 0.04em; }
+  .empty { padding: 1.5rem; text-align: center; color: var(--muted); font-size: 0.85rem; }
+  footer { margin-top: 1rem; text-align: center; color: var(--muted); font-size: 0.74rem; }
+  @media (max-width: 800px) {
+    .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .dashboard-grid { grid-template-columns: 1fr; }
+    .focus-item { grid-template-columns: 36px minmax(0, 1fr); }
+    .focus-action { grid-column: 2; }
+  }
+  @media (max-width: 480px) {
+    .hero { padding: 1.5rem 1rem 1.75rem; }
+    main { width: min(100% - 1rem, 1180px); }
+    .metrics { gap: 0.5rem; }
+    .metric, .card { border-radius: 12px; }
+    .metric { padding: 0.85rem; }
+    .metric-value { font-size: 1.55rem; }
+    .stage-row { grid-template-columns: 78px minmax(0, 1fr) 26px; }
   }
 </style>
 </head>
 <body>
-<header>
-  <h1>Truthful Resume Agent</h1>
-  <p>基于事实库的简历生成系统 | <a href="https://github.com/123xpw/truthful-resume-agent" style="color:rgba(255,255,255,0.8)">GitHub</a></p>
+<header class="hero">
+  <div class="hero-title-row">
+    <div>
+      <h1>求职投递分析</h1>
+      <p class="hero-copy">投递进展与优先级概览</p>
+    </div>
+    <nav style="display:flex;gap:0.55rem;flex-wrap:wrap;justify-content:flex-end" aria-label="页面导航">
+      <a class="action" href="/job-analysis">岗位分析</a>
+      <a class="action" href="/project-review">项目复盘</a>
+    </nav>
+  </div>
+  <div class="sync-strip">
+    <span id="sync-dot" class="sync-dot loading" aria-hidden="true"></span>
+    <span id="sync-summary">正在读取本地投递数据…</span>
+    <button id="sync-button" class="action" type="button">刷新</button>
+    <a id="feishu-link" class="action" href="#" target="_blank" rel="noopener noreferrer" style="display:none">打开飞书</a>
+  </div>
 </header>
-<div class="container">
-  <div class="tabs">
-    <div class="tab active" data-tab="analyze">JD 分析</div>
-    <div class="tab" data-tab="applications">申请列表</div>
-    <div class="tab" data-tab="outcomes">投递看板</div>
-    <div class="tab" data-tab="trends">缺口趋势</div>
-    <div class="tab" data-tab="mastery">Mastery 时间线</div>
-    <div class="tab" data-tab="interview">面试反馈</div>
-  </div>
 
-  <!-- JD 分析 -->
-  <div class="panel active" id="panel-analyze">
-    <div class="card">
-      <h2>分析 JD</h2>
-      <div class="row">
-        <div>
-          <label>申请名称</label><br>
-          <input type="text" id="analyze-name" placeholder="tencent_ai_application">
-        </div>
-        <div>
-          <label>Matcher</label><br>
-          <select id="analyze-matcher" style="padding:0.5rem;border:1px solid var(--border);border-radius:6px;font-size:0.9rem;">
-            <option value="keyword">keyword（默认，保守）</option>
-            <option value="semantic">semantic（需 Qdrant）</option>
-          </select>
-        </div>
-      </div>
-      <br>
-      <label>JD 文本</label><br>
-      <textarea id="analyze-jd" placeholder="粘贴 JD 全文..."></textarea>
-      <br><br>
-      <button onclick="runAnalyze()">分析</button>
-      <div id="analyze-result"></div>
-    </div>
-  </div>
+<main>
+  <div id="system-compatibility" class="system-banner" role="alert"></div>
+  <div id="sync-notice" class="notice" role="status"></div>
 
-  <!-- 申请列表 -->
-  <div class="panel" id="panel-applications">
-    <div class="card">
-      <h2>申请列表</h2>
-      <button onclick="loadApplications()">刷新</button>
-      <div id="applications-result"></div>
-    </div>
-  </div>
+  <section class="metrics" aria-label="投递核心指标">
+    <article class="metric"><div id="metric-active" class="metric-value">—</div><div class="metric-label">进行中</div></article>
+    <article class="metric"><div id="metric-assessment" class="metric-value">—</div><div class="metric-label">笔试阶段</div></article>
+    <article class="metric"><div id="metric-high" class="metric-value">—</div><div class="metric-label">高优先级进行中</div></article>
+    <article class="metric"><div id="metric-planning" class="metric-value">—</div><div class="metric-label">待投递</div></article>
+  </section>
 
-  <!-- 投递看板 -->
-  <div class="panel" id="panel-outcomes">
-    <div class="token-note"><strong>本页面不调用 LLM，记录与统计均为本地确定性操作，Token 消耗为 0。</strong></div>
-    <div class="card storage-card" id="outcome-storage-card">
-      <h2>本地数据状态</h2>
-      <div id="outcome-storage">正在检查本地数据库...</div>
-      <br>
-      <div class="actions">
-        <button onclick="createOutcomeBackup()">立即备份</button>
-        <button onclick="downloadOutcomeExport('json')" class="secondary-button">导出 JSON</button>
-        <button onclick="downloadOutcomeExport('csv')" class="secondary-button">导出 CSV</button>
-      </div>
-      <div id="outcome-storage-result"></div>
-    </div>
-    <div class="stats-grid" id="outcome-summary">
-      <div class="stat-card"><div class="stat-value">—</div><div class="stat-label">追踪申请</div></div>
-      <div class="stat-card"><div class="stat-value">—</div><div class="stat-label">状态事件</div></div>
-      <div class="stat-card"><div class="stat-value">—</div><div class="stat-label">进入面试</div></div>
-      <div class="stat-card"><div class="stat-value">—</div><div class="stat-label">Offer</div></div>
-    </div>
-    <div class="card">
-      <h2>投递版本快速记录</h2>
-      <p class="storage-line">自动读取本机“投递版本”目录。点击状态后直接记录今天，并关联该目录中最新的可用 PDF。</p>
-      <br>
-      <div id="outcome-quick-cards" class="quick-grid"></div>
-    </div>
-    <div class="card">
-      <h2 id="outcome-form-title">记录投递结果</h2>
-      <input type="hidden" id="outcome-event-id">
-      <datalist id="outcome-application-options"></datalist>
-      <div class="row">
-        <div>
-          <label for="outcome-application">申请名称</label><br>
-          <input type="text" id="outcome-application" list="outcome-application-options" placeholder="company_role">
-        </div>
-        <div>
-          <label for="outcome-status">当前事件</label><br>
-          <select id="outcome-status">
-            <option value="applied">已投递</option>
-            <option value="assessment">测评中</option>
-            <option value="interview">面试</option>
-            <option value="offer">Offer</option>
-            <option value="rejected">未通过</option>
-            <option value="withdrawn">主动结束</option>
-            <option value="unknown">待确认</option>
-          </select>
-        </div>
-        <div>
-          <label for="outcome-date">日期</label><br>
-          <input type="date" id="outcome-date">
-        </div>
-      </div>
-      <br>
-      <label for="outcome-resume">实际简历 PDF（可选）</label><br>
-      <select id="outcome-resume" onchange="showArtifactWarning()">
-        <option value="">不关联 PDF</option>
-      </select>
-      <div id="outcome-artifact-warning" class="artifact-warning"></div>
-      <br>
-      <label for="outcome-note">备注（只记录事实，不推断原因）</label><br>
-      <textarea id="outcome-note" class="small-note" maxlength="1000" placeholder="例如：官网状态显示评估中"></textarea>
-      <br><br>
-      <div class="actions">
-        <button onclick="saveOutcome()" id="outcome-save-button">保存记录</button>
-        <button onclick="resetOutcomeForm()" class="secondary-button" type="button">取消编辑</button>
-      </div>
-      <div id="outcome-form-result"></div>
-    </div>
-    <div class="card">
-      <h2>状态时间线</h2>
-      <button onclick="loadOutcomes()">刷新</button>
-      <div id="outcomes-result"></div>
-      <details>
-        <summary id="archived-outcome-summary">已撤销记录（0）</summary>
-        <div id="archived-outcomes-result"></div>
-      </details>
-    </div>
-  </div>
+  <section class="dashboard-grid">
+    <article class="card">
+      <h2>投递状态分布</h2>
+      <p class="card-subtitle">展示当前状态，不把“暂时搁置”误算为待规划。</p>
+      <div id="stage-chart" class="empty">等待飞书数据…</div>
+    </article>
 
-  <!-- 缺口趋势 -->
-  <div class="panel" id="panel-trends">
-    <div class="card">
-      <h2>跨 JD 缺口趋势</h2>
-      <button onclick="loadTrends()">加载</button>
-      <div id="trends-result"></div>
-    </div>
-  </div>
+    <article class="card">
+      <h2>优先级 × 阶段</h2>
+      <p class="card-subtitle">识别投递资源集中在哪里，不计算尚无历史依据的转化率。</p>
+      <div id="priority-chart" class="empty">等待飞书数据…</div>
+      <div class="legend">
+        <span style="--legend-color:#c4544d">高</span>
+        <span style="--legend-color:#d58a20">中</span>
+        <span style="--legend-color:#6d91be">低</span>
+        <span style="--legend-color:#b8c1d1">未设置</span>
+      </div>
+    </article>
 
-  <!-- Mastery 时间线 -->
-  <div class="panel" id="panel-mastery">
-    <div class="card">
-      <h2>Mastery 进度时间线</h2>
-      <div class="row">
-        <div>
-          <label>Fact ID（可选，留空看全部）</label><br>
-          <input type="text" id="mastery-fact-id" placeholder="intern_data_automation">
-        </div>
-      </div>
-      <br>
-      <button onclick="loadMastery()">加载</button>
-      <div id="mastery-result"></div>
-    </div>
-  </div>
+    <article class="card focus-card">
+      <h2>今日关注</h2>
+      <p class="card-subtitle">最多5条。笔试与面试优先，其次是高优先级进行中和高优先级待投递。</p>
+      <div id="focus-list" class="empty">等待飞书数据…</div>
+    </article>
+  </section>
 
-  <!-- 面试反馈 -->
-  <div class="panel" id="panel-interview">
-    <div class="card">
-      <h2>记录面试反馈</h2>
-      <div class="row">
-        <div><label>申请名称</label><br><input type="text" id="fb-name" placeholder="tencent_ai_application"></div>
-        <div><label>Fact ID</label><br><input type="text" id="fb-fact-id" placeholder="intern_data_automation"></div>
-      </div>
-      <br>
-      <label>面试问题</label><br>
-      <input type="text" id="fb-question" placeholder="数据自动化的分页机制怎么实现的？">
-      <br><br>
-      <label>备注（暴露的边界）</label><br>
-      <input type="text" id="fb-note" placeholder="No pagination in current implementation">
-      <br><br>
-      <button onclick="recordFeedback()">记录</button>
-      <div id="interview-record-result"></div>
-    </div>
-    <div class="card">
-      <h2>查看面试反馈</h2>
-      <div class="row">
-        <div><label>申请名称</label><br><input type="text" id="fb-list-name" placeholder="tencent_ai_application"></div>
-      </div>
-      <br>
-      <button onclick="loadFeedback()">加载</button>
-      <div id="interview-list-result"></div>
-    </div>
-  </div>
-</div>
+  <footer>只读分析 · 不回写飞书 · 不调用 LLM · 详细记录请在飞书原表中查看</footer>
+</main>
 
 <script>
 const API = '/api';
-let outcomeEvents = [];
-let archivedOutcomeEvents = [];
-let resumeArtifacts = [];
-const outcomeLabels = {
-  applied: '已投递', assessment: '测评中', interview: '面试', offer: 'Offer',
-  rejected: '未通过', withdrawn: '主动结束', unknown: '待确认'
+const EXPECTED_API_CONTRACT = '2026-08-26.2';
+const stageColors = {
+  planning: '#6d91be', screening: '#3478f6', assessment: '#7656b8',
+  interview: '#39a7c8', shelved: '#a7afb9', closed: '#c4544d', other: '#d58a20'
 };
-document.querySelectorAll('.tab').forEach(tab => {
-  tab.onclick = () => {
-    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
-    tab.classList.add('active');
-    document.getElementById('panel-' + tab.dataset.tab).classList.add('active');
-    history.replaceState(null, '', '#' + tab.dataset.tab);
-    if (tab.dataset.tab === 'outcomes') initializeOutcomeDashboard();
-  };
-});
-
-const requestedTab = document.querySelector(`.tab[data-tab="${location.hash.slice(1)}"]`);
-if (requestedTab) requestedTab.click();
-
-async function api(path, opts = {}) {
-  const res = await fetch(API + path, opts);
-  if (!res.ok) {
-    const e = await res.json().catch(() => ({detail: res.statusText}));
-    const detail = e.detail;
-    const message = typeof detail === 'object' ? (detail.message || detail.code) : detail;
-    throw new Error(message || 'Request failed');
-  }
-  return res.json();
-}
+const priorityColors = {'高': '#c4544d', '中': '#d58a20', '低': '#6d91be', '未设置': '#b8c1d1'};
+let lastSnapshot = null;
 
 function escapeHtml(value) {
-  return String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[ch]));
+  return String(value ?? '').replace(/[&<>"']/g, character => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[character]));
 }
 
-function localToday() {
-  const now = new Date();
-  const offset = now.getTimezoneOffset() * 60000;
-  return new Date(now.getTime() - offset).toISOString().slice(0, 10);
-}
-
-function showResult(id, html, cls = '') {
-  const el = document.getElementById(id);
-  el.innerHTML = `<div class="status-msg ${cls}">${html}</div>`;
-}
-
-async function runAnalyze() {
-  const name = document.getElementById('analyze-name').value.trim();
-  const jd = document.getElementById('analyze-jd').value.trim();
-  const matcher = document.getElementById('analyze-matcher').value;
-  if (!name || !jd) { showResult('analyze-result', '请填写名称和 JD 文本', 'status-err'); return; }
-  showResult('analyze-result', '分析中...', 'loading');
-  try {
-    const r = await api('/analyze', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({jd_text: jd, name, matcher}) });
-    let html = `<strong>Job type:</strong> ${r.job_type}<br>`;
-    if (r.not_writable.length) html += `<strong>Not writable:</strong> ${r.not_writable.join(', ')}<br>`;
-    if (r.strong_matches.length) html += `<strong>Strong matches:</strong> ${r.strong_matches.join(', ')}<br>`;
-    if (r.weak_matches.length) html += `<strong>Weak matches:</strong> ${r.weak_matches.join(', ')}<br>`;
-    html += `<em>JD saved: ${r.jd_path}</em>`;
-    showResult('analyze-result', html, 'status-ok');
-  } catch (e) { showResult('analyze-result', e.message, 'status-err'); }
-}
-
-async function loadApplications() {
-  showResult('applications-result', '加载中...', 'loading');
-  try {
-    const r = await api('/applications');
-    if (!r.applications.length) { showResult('applications-result', '暂无申请记录', ''); return; }
-    let html = '<table><thead><tr><th>名称</th><th>状态</th></tr></thead><tbody>';
-    r.applications.forEach(a => { html += `<tr><td>${a.name}</td><td>${a.state}</td></tr>`; });
-    html += '</tbody></table>';
-    document.getElementById('applications-result').innerHTML = html;
-  } catch (e) { showResult('applications-result', e.message, 'status-err'); }
-}
-
-async function initializeOutcomeDashboard() {
-  if (!document.getElementById('outcome-date').value) {
-    document.getElementById('outcome-date').value = localToday();
-  }
-  try {
-    const previousResume = document.getElementById('outcome-resume').value;
-    const [applications, artifacts] = await Promise.all([api('/applications'), api('/resume-artifacts')]);
-    resumeArtifacts = artifacts.artifacts;
-    const names = new Set(applications.applications.map(item => item.name));
-    resumeArtifacts.filter(item => item.source === 'delivery').forEach(item => {
-      const relative = item.ref.slice('delivery:'.length);
-      const company = relative.split('/')[0];
-      if (company) names.add(company);
-    });
-    document.getElementById('outcome-application-options').innerHTML = [...names].sort().map(name => `<option value="${escapeHtml(name)}"></option>`).join('');
-    const stateSuffix = {candidate: '', unverified: ' ⚠ 未验证', discarded: ' ⚠ 已废弃', delivered_old: ' · 已投递旧版'};
-    document.getElementById('outcome-resume').innerHTML = '<option value="">不关联 PDF</option>' + resumeArtifacts.map(item =>
-      `<option value="${escapeHtml(item.ref)}" data-state="${escapeHtml(item.state)}">${escapeHtml(item.label + stateSuffix[item.state])}</option>`
-    ).join('');
-    if ([...document.getElementById('outcome-resume').options].some(option => option.value === previousResume)) {
-      document.getElementById('outcome-resume').value = previousResume;
+async function api(path, options = {}) {
+  const response = await fetch(API + path, options);
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({detail: response.statusText}));
+    if (response.status === 404 && error.detail === 'Not Found') {
+      throw new Error('页面与后台版本不一致，请重新启动投递看板。');
     }
-    await loadOutcomes();
-  } catch (e) {
-    showResult('outcomes-result', escapeHtml(e.message), 'status-err');
+    const detail = error.detail;
+    throw new Error(typeof detail === 'object' ? (detail.message || detail.code) : (detail || '请求失败'));
   }
+  return response.json();
 }
 
-function showArtifactWarning() {
-  const select = document.getElementById('outcome-resume');
-  const state = select.selectedOptions[0]?.dataset.state;
-  const warning = state === 'unverified' ? '该文件名标记为“未验证勿投递”，请确认是否确为当时使用的版本。'
-    : state === 'discarded' ? '该文件名标记为“废弃”。' : '';
-  document.getElementById('outcome-artifact-warning').textContent = warning;
+function formatSyncTime(value) {
+  if (!value) return '时间未知';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '时间未知';
+  return new Intl.DateTimeFormat('zh-CN', {
+    month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit'
+  }).format(date);
 }
 
-function renderOutcomeSummary(summary) {
-  document.getElementById('outcome-summary').innerHTML = `
-    <div class="stat-card"><div class="stat-value">${summary.tracked_applications}</div><div class="stat-label">追踪申请</div></div>
-    <div class="stat-card"><div class="stat-value">${summary.event_count}</div><div class="stat-label">状态事件</div></div>
-    <div class="stat-card"><div class="stat-value">${summary.interview_or_offer_count}</div><div class="stat-label">进入面试·${(summary.interview_rate * 100).toFixed(0)}%</div></div>
-    <div class="stat-card"><div class="stat-value">${summary.ever_by_status.offer}</div><div class="stat-label">Offer·${(summary.offer_rate * 100).toFixed(0)}%</div></div>`;
+function setSyncState(kind, text) {
+  document.getElementById('sync-dot').className = `sync-dot ${kind}`;
+  document.getElementById('sync-summary').textContent = text;
 }
 
-function renderOutcomeStorage(storage) {
-  const modeLabels = {preview: 'Preview · 真实数据副本', pilot: 'Pilot · 并行试用', trusted: 'Trusted Local · 正式数据'};
-  const trusted = storage.mode === 'trusted';
-  const card = document.getElementById('outcome-storage-card');
-  card.classList.toggle('trusted', trusted);
-  document.getElementById('outcome-storage').innerHTML = `
-    <span class="mode-badge ${trusted ? 'trusted' : ''}">${escapeHtml(modeLabels[storage.mode] || storage.mode)}</span>
-    <span class="badge ${storage.integrity === 'ok' ? 'status-ok' : 'status-err'}">SQLite ${escapeHtml(storage.integrity)}</span>
-    <div class="storage-line">数据库：${escapeHtml(storage.database_path)}</div>
-    <div class="storage-line">自动备份：${storage.backup_count} 份 · 活跃事件：${storage.active_events} · 已撤销：${storage.archived_events}</div>
-    ${trusted ? '' : '<div class="artifact-warning">当前不是唯一数据源阶段，请继续保留原始投递记录。</div>'}`;
+function showNotice(text = '', kind = '') {
+  const notice = document.getElementById('sync-notice');
+  notice.textContent = text;
+  notice.className = kind ? `notice ${kind}` : 'notice';
 }
 
-function renderQuickOutcomeCards() {
-  const groups = new Map();
-  resumeArtifacts.filter(item => item.source === 'delivery').forEach(item => {
-    const key = item.application_key || item.application_hint;
-    if (!groups.has(key)) groups.set(key, {label: item.application_hint, items: []});
-    groups.get(key).items.push(item);
-  });
-  if (!groups.size) {
-    document.getElementById('outcome-quick-cards').innerHTML = '<div class="storage-line">尚未发现“投递版本”PDF；仍可使用下方表单记录。</div>';
+function renderMetrics(metrics = {}) {
+  document.getElementById('metric-active').textContent = metrics.active ?? '—';
+  document.getElementById('metric-assessment').textContent = metrics.assessment ?? '—';
+  document.getElementById('metric-high').textContent = metrics.active_high_priority ?? '—';
+  document.getElementById('metric-planning').textContent = metrics.planning ?? '—';
+}
+
+function renderStages(stages = []) {
+  const target = document.getElementById('stage-chart');
+  if (!stages.length) { target.className = 'empty'; target.textContent = '暂无可展示的状态数据。'; return; }
+  const maximum = Math.max(...stages.map(item => item.count), 1);
+  target.className = '';
+  target.innerHTML = stages.map(item => `
+    <div class="stage-row">
+      <span class="stage-name">${escapeHtml(item.label)}</span>
+      <div class="bar-track"><div class="bar-fill" style="width:${Math.max(3, item.count / maximum * 100)}%;background:${stageColors[item.key] || stageColors.other}"></div></div>
+      <span class="stage-count">${escapeHtml(item.count)}</span>
+    </div>`).join('');
+}
+
+function renderPriorities(rows = []) {
+  const target = document.getElementById('priority-chart');
+  if (!rows.length) { target.className = 'empty'; target.textContent = '暂无可展示的优先级数据。'; return; }
+  target.className = '';
+  target.innerHTML = rows.map(row => {
+    const total = Object.values(row.counts || {}).reduce((sum, count) => sum + count, 0) || 1;
+    const summary = ['高', '中', '低'].filter(name => row.counts?.[name]).map(name => `${name}${row.counts[name]}`).join(' · ');
+    const segments = ['高', '中', '低', '未设置'].filter(name => row.counts?.[name]).map(name =>
+      `<span class="segment" title="${escapeHtml(name)} ${escapeHtml(row.counts[name])}" style="width:${row.counts[name] / total * 100}%;background:${priorityColors[name]}"></span>`
+    ).join('');
+    return `<div class="priority-row"><div class="priority-label"><span>${escapeHtml(row.label)}</span><span>${escapeHtml(summary || '未设置')}</span></div><div class="stack">${segments}</div></div>`;
+  }).join('');
+}
+
+function renderFocus(items = []) {
+  const target = document.getElementById('focus-list');
+  if (!items.length) { target.className = 'empty'; target.textContent = '当前没有需要优先处理的记录。'; return; }
+  target.className = 'focus-list';
+  target.innerHTML = items.map((item, index) => `
+    <article class="focus-item">
+      <div class="focus-rank">${index + 1}</div>
+      <div>
+        <div class="focus-title">#${escapeHtml(item.sequence)} · ${escapeHtml(item.company || '公司待补充')} · ${escapeHtml(item.role || '岗位待补充')}</div>
+        <div class="focus-meta">
+          <span class="pill ${item.priority === '高' ? 'high' : ''}">${escapeHtml(item.priority || '未设置')}优先级</span>
+          <span class="pill">${escapeHtml(item.status || '状态未知')}</span>
+          <span>${escapeHtml(item.reason)}</span>
+        </div>
+      </div>
+      <div class="focus-action"><strong>建议动作</strong>${escapeHtml(item.action)}</div>
+    </article>`).join('');
+}
+
+function renderDashboard(sync) {
+  lastSnapshot = sync;
+  const link = document.getElementById('feishu-link');
+  if (sync.document_url) { link.href = sync.document_url; link.style.display = 'inline-flex'; }
+  else { link.style.display = 'none'; }
+  const analysis = sync.analysis;
+  const dashboard = analysis?.dashboard;
+  if (!sync.connected || !analysis?.ready || !dashboard) {
+    setSyncState(sync.configured ? 'error' : 'error', sync.configured ? '尚无可用投递数据，请点击刷新重试。' : '飞书尚未完成本地授权配置。');
+    renderMetrics(); renderStages(); renderPriorities(); renderFocus();
     return;
   }
-  const latestByApplication = new Map();
-  outcomeEvents.forEach(event => {
-    if (!latestByApplication.has(event.application)) latestByApplication.set(event.application, event);
-  });
-  const safeRank = {delivered_old: 0, candidate: 1, unverified: 2, discarded: 3};
-  const cards = [...groups.entries()].sort((a, b) => a[1].label.localeCompare(b[1].label, 'zh-CN')).map(([key, group]) => {
-    const items = group.items.sort((a, b) => (safeRank[a.state] - safeRank[b.state]) || b.modified_at.localeCompare(a.modified_at));
-    const selected = items[0];
-    const safeRef = ['unverified', 'discarded'].includes(selected.state) ? '' : selected.ref;
-    const current = latestByApplication.get(key);
-    const currentText = current ? `当前记录：${outcomeLabels[current.status] || current.status} · ${current.date}` : '尚无投递状态记录';
-    const warning = safeRef ? '' : '<div class="artifact-warning">最新文件被标记为未验证/废弃，快速记录不会关联该 PDF。</div>';
-    const buttons = ['applied', 'assessment', 'interview', 'offer', 'rejected'].map(status =>
-      `<button class="compact-button" data-application="${escapeHtml(key)}" data-status="${status}" data-resume="${escapeHtml(safeRef)}" onclick="quickRecordOutcome(this)">${outcomeLabels[status]}</button>`
-    ).join('');
-    return `<div class="quick-card"><h3>${escapeHtml(group.label)}</h3><div class="quick-current">${escapeHtml(currentText)}</div><p>${escapeHtml(selected.filename)}</p>${warning}<div class="actions">${buttons}</div></div>`;
-  });
-  document.getElementById('outcome-quick-cards').innerHTML = cards.join('');
+  setSyncState('ok', `已同步 ${analysis.total_records} 条 · 最近成功 ${formatSyncTime(sync.last_success_at)}`);
+  renderMetrics(dashboard.metrics);
+  renderStages(dashboard.stage_counts);
+  renderPriorities(dashboard.priority_by_stage);
+  renderFocus(dashboard.focus_items);
 }
 
-function renderArchivedOutcomes() {
-  document.getElementById('archived-outcome-summary').textContent = `已撤销记录（${archivedOutcomeEvents.length}）`;
-  if (!archivedOutcomeEvents.length) {
-    document.getElementById('archived-outcomes-result').innerHTML = '<div class="storage-line">暂无已撤销记录</div>';
-    return;
-  }
-  let html = '<table><thead><tr><th>日期</th><th>申请</th><th>状态</th><th>操作</th></tr></thead><tbody>';
-  archivedOutcomeEvents.forEach(item => {
-    html += `<tr><td>${escapeHtml(item.date)}</td><td>${escapeHtml(item.application)}</td><td>${escapeHtml(outcomeLabels[item.status] || item.status)}</td><td><button class="compact-button" onclick="restoreOutcomeEvent('${escapeHtml(item.event_id)}')">恢复</button></td></tr>`;
-  });
-  document.getElementById('archived-outcomes-result').innerHTML = html + '</tbody></table>';
-}
-
-async function loadOutcomes() {
-  showResult('outcomes-result', '加载中...', 'loading');
+async function verifyApiCompatibility() {
+  const banner = document.getElementById('system-compatibility');
   try {
-    const r = await api('/outcomes');
-    outcomeEvents = r.events;
-    archivedOutcomeEvents = r.archived_events || [];
-    renderOutcomeSummary(r.summary);
-    renderOutcomeStorage(r.storage);
-    renderQuickOutcomeCards();
-    renderArchivedOutcomes();
-    if (!outcomeEvents.length) {
-      showResult('outcomes-result', '暂无投递记录', '');
-      return;
-    }
-    let html = '<table><thead><tr><th>日期</th><th>申请</th><th>状态</th><th>PDF</th><th>备注</th><th>操作</th></tr></thead><tbody>';
-    outcomeEvents.forEach(item => {
-      const digest = item.resume_sha256 ? item.resume_sha256.slice(0, 12) : '—';
-      const pdf = item.resume_name ? `${escapeHtml(item.resume_name)}<br><small>${digest}</small>` : '—';
-      html += `<tr><td>${escapeHtml(item.date)}</td><td>${escapeHtml(item.application)}</td><td>${escapeHtml(outcomeLabels[item.status] || item.status)}</td><td>${pdf}</td><td>${escapeHtml(item.note)}</td><td><div class="actions"><button class="compact-button" onclick="editOutcome('${escapeHtml(item.event_id)}')">编辑</button><button class="compact-button danger-button" onclick="deleteOutcomeEvent('${escapeHtml(item.event_id)}')">撤销</button></div></td></tr>`;
-    });
-    html += '</tbody></table>';
-    document.getElementById('outcomes-result').innerHTML = html;
-  } catch (e) { showResult('outcomes-result', escapeHtml(e.message), 'status-err'); }
+    const response = await fetch(`${API}/meta`, {cache: 'no-store'});
+    if (!response.ok) throw new Error('API metadata unavailable');
+    const metadata = await response.json();
+    if (metadata.contract_version !== EXPECTED_API_CONTRACT) throw new Error('API contract mismatch');
+    return true;
+  } catch (_) {
+    banner.textContent = '页面与后台版本不一致。请关闭后重新启动“投递看板”，不要继续同步数据。';
+    banner.style.display = 'block';
+    document.getElementById('sync-button').disabled = true;
+    setSyncState('error', '当前页面不可用，请重新启动投递看板。');
+    return false;
+  }
 }
 
-async function quickRecordOutcome(button) {
+async function loadLocalSnapshot() {
+  const response = await api('/feishu-sync');
+  renderDashboard(response.sync);
+  return response.sync;
+}
+
+async function syncFromFeishu(manual = false) {
+  const button = document.getElementById('sync-button');
   button.disabled = true;
+  setSyncState('loading', manual ? '正在刷新飞书数据…' : '正在后台检查飞书更新…');
+  if (manual) showNotice();
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 20000);
   try {
-    await api('/outcomes', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({
-        application: button.dataset.application,
-        status: button.dataset.status,
-        date: localToday(),
-        resume_ref: button.dataset.resume || null,
-        note: ''
-      })
-    });
-    showResult('outcome-storage-result', `已记录“${escapeHtml(outcomeLabels[button.dataset.status])}”，并创建本地备份。`, 'status-ok');
-    await loadOutcomes();
-  } catch (e) {
-    showResult('outcome-storage-result', escapeHtml(e.message), 'status-err');
+    const response = await api('/feishu-sync', {method: 'POST', signal: controller.signal});
+    renderDashboard(response.sync);
+    if (manual) showNotice(response.result.changed ? '已读取飞书最新内容。' : '飞书内容没有变化。', 'ok');
+  } catch (error) {
+    if (lastSnapshot?.analysis?.ready) {
+      renderDashboard(lastSnapshot);
+      setSyncState('error', `同步失败，继续使用上次成功的 ${lastSnapshot.analysis.total_records} 条记录。`);
+    } else {
+      setSyncState('error', '同步失败，当前没有可用的本地数据。');
+    }
+    if (manual) {
+      showNotice(error.name === 'AbortError' ? '同步超过20秒，已停止等待。' : `同步失败：${error.message}`, 'error');
+    }
   } finally {
+    window.clearTimeout(timeout);
     button.disabled = false;
   }
 }
 
-async function createOutcomeBackup() {
-  showResult('outcome-storage-result', '备份中...', 'loading');
+async function initializePage() {
+  if (!await verifyApiCompatibility()) return;
   try {
-    const r = await api('/outcomes/backups', {method: 'POST'});
-    showResult('outcome-storage-result', `备份已创建：${escapeHtml(r.backup_name)}`, 'status-ok');
-    await loadOutcomes();
-  } catch (e) { showResult('outcome-storage-result', escapeHtml(e.message), 'status-err'); }
-}
-
-function downloadOutcomeExport(format) {
-  window.location.href = `${API}/outcomes/export?format=${encodeURIComponent(format)}`;
-}
-
-async function saveOutcome() {
-  const eventId = document.getElementById('outcome-event-id').value;
-  const payload = {
-    application: document.getElementById('outcome-application').value.trim(),
-    status: document.getElementById('outcome-status').value,
-    date: document.getElementById('outcome-date').value,
-    resume_ref: document.getElementById('outcome-resume').value || null,
-    note: document.getElementById('outcome-note').value.trim()
-  };
-  if (!payload.application || !payload.date) {
-    showResult('outcome-form-result', '请填写申请名称和日期', 'status-err');
-    return;
+    const snapshot = await loadLocalSnapshot();
+    if (snapshot.configured) await syncFromFeishu(false);
+  } catch (error) {
+    setSyncState('error', `读取本地数据失败：${error.message}`);
   }
-  showResult('outcome-form-result', '保存中...', 'loading');
-  try {
-    await api(eventId ? `/outcomes/${encodeURIComponent(eventId)}` : '/outcomes', {
-      method: eventId ? 'PUT' : 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify(payload)
-    });
-    resetOutcomeForm();
-    showResult('outcome-form-result', '已保存，LLM 调用 0 次。', 'status-ok');
-    await loadOutcomes();
-  } catch (e) { showResult('outcome-form-result', escapeHtml(e.message), 'status-err'); }
 }
 
-function editOutcome(eventId) {
-  const item = outcomeEvents.find(event => event.event_id === eventId);
-  if (!item) return;
-  document.getElementById('outcome-event-id').value = item.event_id;
-  document.getElementById('outcome-application').value = item.application;
-  document.getElementById('outcome-status').value = item.status;
-  document.getElementById('outcome-date').value = item.date;
-  document.getElementById('outcome-resume').value = item.resume_ref || '';
-  document.getElementById('outcome-note').value = item.note || '';
-  document.getElementById('outcome-form-title').textContent = '编辑投递记录';
-  document.getElementById('outcome-save-button').textContent = '保存修改';
-  showArtifactWarning();
-  document.getElementById('panel-outcomes').scrollIntoView({behavior: 'smooth'});
-}
-
-function resetOutcomeForm() {
-  document.getElementById('outcome-event-id').value = '';
-  document.getElementById('outcome-application').value = '';
-  document.getElementById('outcome-status').value = 'applied';
-  document.getElementById('outcome-date').value = localToday();
-  document.getElementById('outcome-resume').value = '';
-  document.getElementById('outcome-note').value = '';
-  document.getElementById('outcome-form-title').textContent = '记录投递结果';
-  document.getElementById('outcome-save-button').textContent = '保存记录';
-  document.getElementById('outcome-artifact-warning').textContent = '';
-}
-
-async function deleteOutcomeEvent(eventId) {
-  if (!confirm('确定撤销这条投递记录？记录会进入“已撤销”，可以恢复；简历 PDF 不会被删除。')) return;
-  try {
-    await api(`/outcomes/${encodeURIComponent(eventId)}`, {method: 'DELETE'});
-    if (document.getElementById('outcome-event-id').value === eventId) resetOutcomeForm();
-    await loadOutcomes();
-  } catch (e) { showResult('outcomes-result', escapeHtml(e.message), 'status-err'); }
-}
-
-async function restoreOutcomeEvent(eventId) {
-  try {
-    await api(`/outcomes/${encodeURIComponent(eventId)}/restore`, {method: 'POST'});
-    showResult('outcome-storage-result', '已恢复投递记录。', 'status-ok');
-    await loadOutcomes();
-  } catch (e) { showResult('outcome-storage-result', escapeHtml(e.message), 'status-err'); }
-}
-
-async function loadTrends() {
-  showResult('trends-result', '加载中...', 'loading');
-  try {
-    const r = await api('/career-trends');
-    let html = `<strong>共 ${r.total_jds} 份 JD</strong> | ${r.snapshot_count} 次快照<br><br>`;
-    if (r.high.length) {
-      html += '<strong style="color:var(--danger)">🔴 优先补（≥2 份 JD）</strong><br>';
-      r.high.forEach(t => { html += `<span class="badge badge-high">${t.tech}</span> (${t.count} 份: ${t.jds.join(', ')})<br>`; });
-      html += '<br>';
-    }
-    if (r.low.length) {
-      html += '<strong style="color:var(--warning)">🟡 考虑补（1 份）</strong><br>';
-      r.low.forEach(t => { html += `<span class="badge badge-low">${t.tech}</span> (${t.jds.join(', ')})<br>`; });
-    }
-    document.getElementById('trends-result').innerHTML = html;
-  } catch (e) { showResult('trends-result', e.message, 'status-err'); }
-}
-
-async function loadMastery() {
-  const factId = document.getElementById('mastery-fact-id').value.trim();
-  showResult('mastery-result', '加载中...', 'loading');
-  try {
-    const path = factId ? `/mastery-history?fact_id=${encodeURIComponent(factId)}` : '/mastery-history';
-    const r = await api(path);
-    document.getElementById('mastery-result').innerHTML = `<pre>${r.rendered}</pre>`;
-  } catch (e) { showResult('mastery-result', e.message, 'status-err'); }
-}
-
-async function recordFeedback() {
-  const application = document.getElementById('fb-name').value.trim();
-  const fact_id = document.getElementById('fb-fact-id').value.trim();
-  const question = document.getElementById('fb-question').value.trim();
-  const note = document.getElementById('fb-note').value.trim();
-  if (!application || !fact_id || !question) { showResult('interview-record-result', '请填写申请名称、Fact ID 和问题', 'status-err'); return; }
-  showResult('interview-record-result', '记录中...', 'loading');
-  try {
-    const r = await api('/record-interview', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({application, fact_id, question, note}) });
-    showResult('interview-record-result', `已记录: ${r.date} [${r.fact_id}]`, 'status-ok');
-  } catch (e) { showResult('interview-record-result', e.message, 'status-err'); }
-}
-
-async function loadFeedback() {
-  const name = document.getElementById('fb-list-name').value.trim();
-  if (!name) { showResult('interview-list-result', '请填写申请名称', 'status-err'); return; }
-  showResult('interview-list-result', '加载中...', 'loading');
-  try {
-    const r = await api(`/interview-feedback/${encodeURIComponent(name)}`);
-    document.getElementById('interview-list-result').innerHTML = `<pre>${r.rendered}</pre>`;
-  } catch (e) { showResult('interview-list-result', e.message, 'status-err'); }
-}
+document.getElementById('sync-button').addEventListener('click', () => syncFromFeishu(true));
+initializePage();
 </script>
 </body>
 </html>

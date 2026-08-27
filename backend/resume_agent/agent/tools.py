@@ -3,17 +3,22 @@
 from __future__ import annotations
 
 import json
+from typing import Iterable
 
 from langchain_core.tools import tool
 
 from ..analyzer import contains_keyword
 from ..fact_store import load_facts
+from ..rules import Fact
 
 
-@tool
-def search_facts(query: str) -> str:
-    """检索事实库，返回机器可读的事实证据包。"""
-    facts = load_facts()
+def build_search_payload(query: str, facts: Iterable[Fact], *, limit: int = 5) -> dict:
+    """Build the deterministic lexical evidence bundle used by the Agent.
+
+    Keeping this logic outside the decorated tool gives evaluations a way to
+    compare the production retrieval path without invoking LangChain or
+    reading a different fact-bank snapshot.
+    """
     normalized_query = query.lower()
     tokens = normalized_query.split()
     scored = []
@@ -40,11 +45,18 @@ def search_facts(query: str) -> str:
                 "risk": fact.risk,
                 "lexical_score": score,
             }
-            for score, fact in scored[:5]
+            for score, fact in scored[: max(0, limit)]
         ],
     }
     if not scored:
         payload["message"] = "事实库中没有与查询相关的事实。"
+    return payload
+
+
+@tool
+def search_facts(query: str) -> str:
+    """检索事实库，返回机器可读的事实证据包。"""
+    payload = build_search_payload(query, load_facts())
     return json.dumps(payload, ensure_ascii=False)
 
 

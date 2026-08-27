@@ -23,9 +23,16 @@ from ..agent.observability import log_event
 from ..agent.runtime import AgentInvocationError, AgentRuntime, DEFAULT_RUNTIME_DB
 from ..analyzer import analyze_jd, save_jd_memory, slugify
 from ..fact_store import load_facts
+from ..feishu_links import (
+    delete_feishu_application_link,
+    list_feishu_application_links,
+    save_feishu_application_link,
+)
+from ..feishu_sync import FeishuSyncError, feishu_sync_status, sync_feishu_sheet
 from ..gaps import build_gap_report, render_gap_report
 from ..gap_trends import load_snapshots
 from ..interview_feedback import load_feedback, record_feedback, render_feedback
+from ..job_analysis import build_job_analysis_preview
 from ..mastery_history import load_mastery_history, render_mastery_history
 from ..outcomes import (
     VALID_OUTCOMES,
@@ -51,6 +58,7 @@ from ..llm_client import LLMNotConfigured, get_api_key
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 TEMPLATES_DIR = Path(__file__).parent / "templates"
+API_CONTRACT_VERSION = "2026-08-26.2"
 
 app = FastAPI(title="Truthful Resume Agent", version="0.3.0-dev")
 
@@ -60,6 +68,10 @@ class AnalyzeRequest(BaseModel):
     name: str
     matcher: Literal["keyword", "semantic"] = "keyword"
     fallback_to_keyword: bool = True
+
+
+class JobAnalysisPreviewRequest(BaseModel):
+    jd_text: str = Field(min_length=1, max_length=100_000)
 
 
 class AgentMessageRequest(BaseModel):
@@ -86,6 +98,11 @@ class OutcomeBackupRestoreRequest(BaseModel):
     confirm: Literal["RESTORE"]
 
 
+class FeishuApplicationLinkRequest(BaseModel):
+    application: str = Field(min_length=1, max_length=120)
+    resume_ref: str | None = Field(default=None, max_length=1000)
+
+
 @lru_cache(maxsize=1)
 def get_agent_runtime() -> AgentRuntime:
     configured = os.environ.get("RESUME_AGENT_RUNTIME_DB")
@@ -94,6 +111,28 @@ def get_agent_runtime() -> AgentRuntime:
 
 def get_project_root() -> Path:
     return PROJECT_ROOT
+
+
+def web_semantic_enabled() -> bool:
+    """Keep model downloads and cold starts out of interactive HTTP requests."""
+    value = os.environ.get("RESUME_AGENT_WEB_SEMANTIC_ENABLED")
+    if value is None:
+        env_path = PROJECT_ROOT / ".env"
+        if env_path.is_file():
+            for line in env_path.read_text(encoding="utf-8").splitlines():
+                stripped = line.strip()
+                if not stripped or stripped.startswith("#") or "=" not in stripped:
+                    continue
+                key, _, configured = stripped.partition("=")
+                if key.strip() == "RESUME_AGENT_WEB_SEMANTIC_ENABLED":
+                    value = configured.strip()
+                    break
+    return (value or "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
 
 
 def _uuid(value: str, label: str) -> str:
@@ -136,9 +175,36 @@ def index() -> str:
     return (TEMPLATES_DIR / "index.html").read_text(encoding="utf-8")
 
 
+@app.get("/job-analysis", response_class=HTMLResponse)
+def job_analysis_page() -> str:
+    return (TEMPLATES_DIR / "job_analysis.html").read_text(encoding="utf-8")
+
+
+@app.get("/project-review", response_class=HTMLResponse)
+def project_review_page() -> str:
+    """Static decision log and interview refresher; no private runtime data."""
+    return (TEMPLATES_DIR / "project_review.html").read_text(encoding="utf-8")
+
+
 @app.get("/healthz")
 def health() -> dict:
     return {"status": "ok"}
+
+
+@app.get("/api/meta")
+def api_meta() -> dict:
+    return {
+        "contract_version": API_CONTRACT_VERSION,
+        "jd_analysis": {
+            "default_matcher": "keyword",
+            "semantic_enabled": web_semantic_enabled(),
+        },
+        "job_analysis_preview": {
+            "path": "/api/job-analysis/preview",
+            "saves_jd": False,
+            "llm_calls": 0,
+        },
+    }
 
 
 @app.get("/readyz")
@@ -252,6 +318,98 @@ def get_outcomes(project_root: Path = Depends(get_project_root)) -> dict:
         "valid_statuses": sorted(VALID_OUTCOMES),
         "llm_calls": 0,
     }
+
+
+@app.get("/api/feishu-sync")
+def get_feishu_sync(project_root: Path = Depends(get_project_root)) -> dict:
+    """Return the last successful read-only Feishu snapshot without network I/O."""
+    try:
+        status = feishu_sync_status(project_root)
+    except (OSError, sqlite3.Error, ValueError) as exc:
+        raise HTTPException(
+            status_code=500,
+            detail={"code": "FEISHU_SYNC_STORE_FAILED", "message": "Failed to read the local Feishu snapshot."},
+        ) from exc
+    return {"sync": status, "llm_calls": 0}
+
+
+@app.post("/api/feishu-sync")
+def post_feishu_sync(project_root: Path = Depends(get_project_root)) -> dict:
+    """Pull one authorized Feishu range and persist a versioned local snapshot."""
+    try:
+        result = sync_feishu_sheet(project_root)
+        status = feishu_sync_status(project_root)
+    except FeishuSyncError as exc:
+        raise HTTPException(
+            status_code=exc.http_status,
+            detail={
+                "code": exc.code,
+                "message": str(exc),
+                "retryable": exc.retryable,
+                "provider_code": exc.provider_code,
+            },
+        ) from exc
+    except (OSError, sqlite3.Error, RuntimeError) as exc:
+        raise HTTPException(
+            status_code=500,
+            detail={"code": "FEISHU_SYNC_STORE_FAILED", "message": "Failed to save the local Feishu snapshot."},
+        ) from exc
+    return {"result": result, "sync": status, "llm_calls": 0}
+
+
+@app.get("/api/feishu-links")
+def get_feishu_links(project_root: Path = Depends(get_project_root)) -> dict:
+    try:
+        result = list_feishu_application_links(project_root)
+    except (OSError, sqlite3.Error, ValueError) as exc:
+        raise HTTPException(
+            status_code=500,
+            detail={"code": "FEISHU_LINK_STORE_FAILED", "message": "Failed to read local Feishu links."},
+        ) from exc
+    return {**result, "llm_calls": 0}
+
+
+@app.put("/api/feishu-links/{sequence}")
+def put_feishu_link(
+    sequence: str,
+    req: FeishuApplicationLinkRequest,
+    project_root: Path = Depends(get_project_root),
+) -> dict:
+    try:
+        link = save_feishu_application_link(
+            project_root,
+            sequence=sequence,
+            application_name=req.application,
+            resume_ref=req.resume_ref,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail={"code": "INVALID_FEISHU_LINK", "message": str(exc)},
+        ) from exc
+    except (OSError, sqlite3.Error, RuntimeError) as exc:
+        raise HTTPException(
+            status_code=500,
+            detail={"code": "FEISHU_LINK_WRITE_FAILED", "message": "Failed to save the local Feishu link."},
+        ) from exc
+    return {"link": link, "llm_calls": 0}
+
+
+@app.delete("/api/feishu-links/{sequence}")
+def remove_feishu_link(sequence: str, project_root: Path = Depends(get_project_root)) -> dict:
+    try:
+        delete_feishu_application_link(project_root, sequence)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=404,
+            detail={"code": "FEISHU_LINK_NOT_FOUND", "message": str(exc)},
+        ) from exc
+    except (OSError, sqlite3.Error, RuntimeError) as exc:
+        raise HTTPException(
+            status_code=500,
+            detail={"code": "FEISHU_LINK_WRITE_FAILED", "message": "Failed to archive the local Feishu link."},
+        ) from exc
+    return {"archived": True, "sequence": sequence, "llm_calls": 0}
 
 
 @app.get("/api/outcomes/storage")
@@ -440,6 +598,41 @@ def post_analyze(req: AnalyzeRequest) -> dict:
     used_matcher = req.matcher
     degraded = False
     warnings: list[dict[str, str]] = []
+    if req.matcher == "semantic" and not web_semantic_enabled():
+        if not req.fallback_to_keyword:
+            raise HTTPException(
+                status_code=503,
+                detail={
+                    "code": "WEB_SEMANTIC_NOT_ENABLED",
+                    "message": "Semantic Web analysis is disabled until the local model is prepared.",
+                },
+            )
+        result = analyze_jd(req.jd_text, matcher="keyword")
+        used_matcher = "keyword"
+        degraded = True
+        warnings.append(
+            {
+                "code": "WEB_SEMANTIC_NOT_ENABLED",
+                "message": "Used deterministic keyword retrieval; Web semantic analysis is not enabled.",
+            }
+        )
+        log_event(
+            "retrieval.degraded",
+            requested_matcher="semantic",
+            used_matcher="keyword",
+            reason="web_semantic_not_enabled",
+        )
+        return {
+            "jd_path": str(jd_path),
+            "requested_matcher": req.matcher,
+            "used_matcher": used_matcher,
+            "degraded": degraded,
+            "warnings": warnings,
+            "job_type": result.job_type,
+            "not_writable": sorted(result.not_writable),
+            "strong_matches": [m.fact.id for m in result.strong_matches],
+            "weak_matches": [m.fact.id for m in result.weak_matches],
+        }
     try:
         result = analyze_jd(req.jd_text, matcher=req.matcher)
     except Exception as exc:
@@ -477,6 +670,17 @@ def post_analyze(req: AnalyzeRequest) -> dict:
         "strong_matches": [m.fact.id for m in result.strong_matches],
         "weak_matches": [m.fact.id for m in result.weak_matches],
     }
+
+
+@app.post("/api/job-analysis/preview")
+def post_job_analysis_preview(req: JobAnalysisPreviewRequest) -> dict:
+    """Analyze explicit JD requirements without saving text or calling an LLM."""
+    if not req.jd_text.strip():
+        raise HTTPException(
+            status_code=400,
+            detail={"code": "EMPTY_JD", "message": "JD text is empty."},
+        )
+    return build_job_analysis_preview(req.jd_text)
 
 
 @app.get("/api/career-trends")

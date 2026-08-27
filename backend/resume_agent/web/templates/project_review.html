@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agent 工程决策与复盘</title>
+<style>
+  :root {
+    --ink: #172033; --muted: #667085; --line: #e3e8f0; --surface: #fff;
+    --canvas: #f4f7fb; --navy: #173b73; --blue: #3478f6; --green: #278f67;
+    --amber: #b96f10; --red: #b7433d; --purple: #7656b8;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; color: var(--ink); background: var(--canvas); font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Noto Sans CJK SC", sans-serif; line-height: 1.68; }
+  a { color: inherit; }
+  .hero { color: #fff; background: linear-gradient(120deg, #102f61 0%, #1c4d88 58%, #246a9a 100%); padding: 2.25rem max(1.25rem, calc((100vw - 1120px) / 2)) 3.5rem; }
+  .hero-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 1.4rem; }
+  .eyebrow { margin: 0 0 0.35rem; font-size: 0.7rem; font-weight: 800; letter-spacing: 0.14em; opacity: 0.68; }
+  h1 { margin: 0; font-size: clamp(1.8rem, 4vw, 2.65rem); line-height: 1.2; }
+  .hero-copy { max-width: 760px; margin: 0.65rem 0 0; font-size: 0.94rem; opacity: 0.84; }
+  .nav { display: flex; gap: 0.55rem; flex-wrap: wrap; justify-content: flex-end; }
+  .nav-link { display: inline-flex; align-items: center; min-height: 38px; padding: 0.42rem 0.78rem; border: 1px solid rgba(255,255,255,0.25); border-radius: 9px; color: #fff; background: rgba(255,255,255,0.1); text-decoration: none; white-space: nowrap; }
+  .nav-link:hover { background: rgba(255,255,255,0.17); }
+  main { width: min(1120px, calc(100% - 2rem)); margin: -1.55rem auto 2.5rem; }
+  .card { border: 1px solid var(--line); border-radius: 16px; background: var(--surface); box-shadow: 0 8px 24px rgba(25,49,84,0.05); }
+  .origin { padding: 1.35rem 1.45rem; border-top: 4px solid var(--blue); }
+  .origin-label { color: var(--blue); font-size: 0.72rem; font-weight: 800; letter-spacing: 0.08em; }
+  .origin p { margin: 0.45rem 0 0; font-size: 1rem; }
+  section { margin-top: 1.15rem; }
+  .section-head { margin-bottom: 0.68rem; }
+  .section-head h2 { margin: 0; font-size: 1.18rem; }
+  .section-head p { margin: 0.2rem 0 0; color: var(--muted); font-size: 0.8rem; }
+  .journey { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); overflow: hidden; }
+  .journey-step { position: relative; min-height: 128px; padding: 1rem; border-right: 1px solid var(--line); background: #fff; }
+  .journey-step:last-child { border-right: 0; }
+  .journey-step:not(:last-child)::after { content: "→"; position: absolute; z-index: 1; top: 50%; right: -0.55rem; width: 1.1rem; height: 1.1rem; display: grid; place-items: center; color: var(--blue); background: #fff; font-weight: 800; transform: translateY(-50%); }
+  .step-no { color: var(--blue); font: 800 0.7rem ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .journey-step strong { display: block; margin-top: 0.35rem; font-size: 0.86rem; }
+  .journey-step span { display: block; margin-top: 0.25rem; color: var(--muted); font-size: 0.74rem; }
+  .metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.72rem; }
+  .metric { padding: 1rem; border: 1px solid var(--line); border-top: 3px solid var(--metric); border-radius: 13px; background: #fff; }
+  .metric-value { color: var(--metric); font-size: 1.55rem; font-weight: 800; line-height: 1.15; }
+  .metric-label { margin-top: 0.28rem; font-size: 0.76rem; font-weight: 700; }
+  .metric-note { margin-top: 0.18rem; color: var(--muted); font-size: 0.69rem; }
+  .decision { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr); gap: 0.85rem; margin-top: 0.85rem; }
+  .decision-card { padding: 1.1rem 1.2rem; }
+  .decision-card h3 { margin: 0; font-size: 0.95rem; }
+  .decision-card p { margin: 0.45rem 0 0; color: #344054; font-size: 0.8rem; }
+  .decision-card.primary { color: #174e38; border-color: #b9dfcc; background: #edf9f3; }
+  .decision-card.warning { color: #684200; border-color: #ecd39d; background: #fff8e9; }
+  .caveat { margin-top: 0.72rem; padding: 0.7rem 0.85rem; border-left: 3px solid #9aa7b8; color: var(--muted); background: #eef2f7; font-size: 0.73rem; }
+  .qa { display: grid; gap: 0.6rem; }
+  details { border: 1px solid var(--line); border-radius: 12px; background: #fff; }
+  summary { padding: 0.88rem 1rem; cursor: pointer; font-size: 0.88rem; font-weight: 750; }
+  details[open] summary { border-bottom: 1px solid var(--line); color: var(--navy); }
+  .answer { padding: 0.85rem 1rem 1rem; color: #344054; font-size: 0.81rem; }
+  .answer p { margin: 0 0 0.55rem; }
+  .answer p:last-child { margin-bottom: 0; }
+  .answer code { padding: 0.08rem 0.25rem; border-radius: 4px; color: #244d82; background: #edf3fb; }
+  .lessons { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.72rem; }
+  .lesson { padding: 1rem 1.05rem; }
+  .lesson-top { display: flex; align-items: center; gap: 0.55rem; }
+  .lesson-mark { display: grid; place-items: center; flex: 0 0 28px; width: 28px; height: 28px; border-radius: 8px; color: var(--navy); background: #eaf1fc; font: 800 0.72rem ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .lesson h3 { margin: 0; font-size: 0.87rem; }
+  .lesson p { margin: 0.48rem 0 0; color: var(--muted); font-size: 0.76rem; }
+  .scope { display: grid; grid-template-columns: 1fr 1fr; overflow: hidden; }
+  .scope-column { padding: 1.1rem 1.2rem; }
+  .scope-column + .scope-column { border-left: 1px solid var(--line); }
+  .scope-column h3 { margin: 0; font-size: 0.92rem; }
+  .scope-column ul { margin: 0.55rem 0 0; padding-left: 1.1rem; color: #475467; font-size: 0.78rem; }
+  .scope-column li + li { margin-top: 0.3rem; }
+  .do h3 { color: var(--green); } .dont h3 { color: var(--red); }
+  .script { padding: 1.2rem 1.3rem; border-left: 4px solid var(--purple); }
+  .script p { margin: 0; color: #344054; font-size: 0.86rem; }
+  .resume { padding: 1.15rem 1.25rem; }
+  .resume-title { font-weight: 780; }
+  .resume ul { margin: 0.62rem 0 0; padding-left: 1.15rem; color: #344054; font-size: 0.78rem; }
+  .resume li + li { margin-top: 0.42rem; }
+  footer { margin-top: 1.25rem; text-align: center; color: var(--muted); font-size: 0.72rem; }
+  @media (max-width: 850px) {
+    .journey { grid-template-columns: 1fr; }
+    .journey-step { min-height: 0; border-right: 0; border-bottom: 1px solid var(--line); }
+    .journey-step:last-child { border-bottom: 0; }
+    .journey-step:not(:last-child)::after { content: "↓"; top: auto; right: 1rem; bottom: -0.55rem; transform: none; }
+    .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .decision, .lessons { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 600px) {
+    .hero { padding: 1.6rem 1rem 3rem; }
+    .hero-row { flex-direction: column; }
+    .nav { justify-content: flex-start; }
+    main { width: min(100% - 1rem, 1120px); }
+    .metrics, .scope { grid-template-columns: 1fr; }
+    .scope-column + .scope-column { border-left: 0; border-top: 1px solid var(--line); }
+  }
+</style>
+</head>
+<body>
+<header class="hero">
+  <div class="hero-row">
+    <div>
+      <p class="eyebrow">AGENT ENGINEERING DECISION LOG</p>
+      <h1>Agent 工程决策与复盘</h1>
+      <p class="hero-copy">记录项目为什么开始、技术为什么存在，以及实验如何改变了当前决策。这是面试前的事实复习页，不是产品宣传页。</p>
+    </div>
+    <nav class="nav" aria-label="页面导航">
+      <a class="nav-link" href="/">投递分析</a>
+      <a class="nav-link" href="/job-analysis">岗位分析</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <article class="card origin">
+    <div class="origin-label">真实起点</div>
+    <p>我在秋招中需要反复根据 JD 调整简历。直接与大模型对话时，每次都要重新提供经历背景，模型也可能把“相关”扩写成“做过”。项目因此从个人效率工具开始，逐步收敛为一个问题：如何让模型只在私人事实边界内回答，并让证据、状态与失败可被追踪？</p>
+  </article>
+
+  <section>
+    <div class="section-head"><h2>问题如何演化</h2><p>项目价值不是起点够不够宏大，而是能否根据真实问题修正方案。</p></div>
+    <div class="card journey">
+      <div class="journey-step"><div class="step-no">01</div><strong>重复提供背景</strong><span>每个 JD 都重新解释经历，对话记忆不稳定。</span></div>
+      <div class="journey-step"><div class="step-no">02</div><strong>结构化事实库</strong><span>为经历分配 fact ID、摘要、边界与风险。</span></div>
+      <div class="journey-step"><div class="step-no">03</div><strong>引入检索</strong><span>尝试减少上下文与无关事实，但出现漏召回和误召。</span></div>
+      <div class="journey-step"><div class="step-no">04</div><strong>增加工程边界</strong><span>用校验、哈希、trace、timeout 和 fail-closed 约束后果。</span></div>
+      <div class="journey-step"><div class="step-no">05</div><strong>回到简单基线</strong><span>数据规模很小时，重新验证完整上下文是否更合理。</span></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head"><h2>完整上下文 vs keyword top-5</h2><p>2026-08-27 的单次私有决策实验：5 份不同方向 JD、11 条事实，同一模型与同一输出约束。</p></div>
+    <div class="metrics">
+      <article class="metric" style="--metric:var(--green)"><div class="metric-value">93.5%</div><div class="metric-label">完整上下文·有用召回</div><div class="metric-note">29 / 31 条审计为 useful 的事实被选中</div></article>
+      <article class="metric" style="--metric:var(--amber)"><div class="metric-value">45.2%</div><div class="metric-label">keyword top-5·有用召回</div><div class="metric-note">14 / 31；五份 JD 都存在漏召回</div></article>
+      <article class="metric" style="--metric:var(--blue)"><div class="metric-value">14.5k</div><div class="metric-label">完整上下文·平均提示字符</div><div class="metric-note">keyword 平均为 7.4k；字符数不等于 Token</div></article>
+      <article class="metric" style="--metric:var(--purple)"><div class="metric-value">6.2s</div><div class="metric-label">完整上下文·平均延迟</div><div class="metric-note">keyword 平均 3.8s；为本次环境观测值</div></article>
+    </div>
+    <div class="decision">
+      <article class="card decision-card primary"><h3>当前决策</h3><p>11 条事实时，完整上下文是更强的默认基线。它的有用精度为 70.7%，keyword 为 70.0%；在几乎不降低精度的前提下，大幅减少了漏召回。因此不再把“必须先 RAG 裁剪”当成先验结论。</p></article>
+      <article class="card decision-card warning"><h3>但不等于交给模型全选</h3><p>完整上下文选了 41 项，keyword 只选 20 项；模型也会把“部分支持”分类得过强。完整可见解决了漏召回，没有解决选材和真实性决策。</p></article>
+    </div>
+    <div class="caveat">边界：这是单次、5 份 JD 的方案选择实验，标签来自可审计基线，不是候选人 ground truth、统计 benchmark 或简历通过率证据。本轮 61 条生成表述经逐条审阅未发现明显越界，但该审阅不是候选人确认或形式化保证。</div>
+  </section>
+
+  <section>
+    <div class="section-head"><h2>关键问题与回答</h2><p>先讲判断，再讲框架；不把技术名词当成业务价值。</p></div>
+    <div class="qa">
+      <details open><summary>如果固定流程能完成任务，为什么还要 Agent？</summary><div class="answer"><p>固定的 JD 匹配、选材和 PDF 生成不需要 Agent。Agent 只用于处理开放式、多轮的事实问答，例如“哪些经历能支持这项要求”和“上一轮回答为什么没通过校验”。</p><p>模型负责理解与解释，不负责事实授权和最终交付。</p></div></details>
+      <details><summary>为什么使用 LangChain 和 LangGraph？</summary><div class="answer"><p>LangChain 提供消息、模型和 tool calling 接口，但是可替换的适配层，不是项目成果。LangGraph 将 <code>retrieve → generate → verify → reflect</code> 建模为显式状态图，便于条件分支、checkpoint 和节点 trace。</p><p>当前节点数不多，纯 Python 状态机也能完成；选用 LangGraph 是为了实践可恢复和可观测的 Agent 工程，不是声称业务离不开框架。</p></div></details>
+      <details><summary>每次直接附上完整事实 Markdown，会不会更好？</summary><div class="answer"><p>对当前 11 条事实，实验显示它是更强的默认基线：覆盖更高，且未明显降低有用精度。但它会把全部私人事实发送给服务商，平均提示字符约翻倍，且模型会倾向多选。</p><p>因此短期优先完整可见 + 确定性边界；事实数量或权限需求增长后，再证明分层索引或语义检索的必要性。</p></div></details>
+      <details><summary>为了秋招做这个项目，会不会显得目的太小？</summary><div class="answer"><p>不回避个人需求。项目的开始是解决重复定制简历和事实失真风险，后续则用 API、状态图、故障处理、评测与溯源去检验一个更一般的问题：如何限制生成式模型能造成的后果。</p><p>不宣称已有企业用户、生产 SLA 或提高通过率。自用动机不是缺点，无法说明真实边界才是。</p></div></details>
+      <details><summary>秋招看板和 Agent 是同一个核心功能吗？</summary><div class="answer"><p>不是。飞书同步、投递分析和岗位看板是个人求职运营工具；事实库、检索、校验、会话恢复和溯源是 Agent 工程主线。两者来自同一真实场景，但在架构和 README 中应该明确分层。</p></div></details>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head"><h2>从实现中得到的工程教训</h2><p>这些问题均已影响当前设计，而不是空泛的“生产化清单”。</p></div>
+    <div class="lessons">
+      <article class="card lesson"><div class="lesson-top"><span class="lesson-mark">01</span><h3>Prompt 不是权限边界</h3></div><p>模型可能跳过工具。代码会强制补做检索，未获得证据时阻断生成。</p></article>
+      <article class="card lesson"><div class="lesson-top"><span class="lesson-mark">02</span><h3>校验节点也是模型</h3></div><p>Verifier 会返回非法 JSON 或错误判断。严格校验 schema，异常时 fail-closed，不把它包装成数学证明。</p></article>
+      <article class="card lesson"><div class="lesson-top"><span class="lesson-mark">03</span><h3>更复杂的检索不一定更好</h3></div><p>Semantic 召回更高但增加明确误召；keyword top-5 在小事实库中又明显漏召回。先建简单基线，再证明复杂度。</p></article>
+      <article class="card lesson"><div class="lesson-top"><span class="lesson-mark">04</span><h3>外部依赖失败是正常状态</h3></div><p>LLM 会超时、限流或不可用；工具也会抛异常。有限重试、结构化错误和 trace 比无限自愈更可控。</p></article>
+      <article class="card lesson"><div class="lesson-top"><span class="lesson-mark">05</span><h3>Memory 不等于安全的记忆</h3></div><p>Checkpoint 会保存对话和证据，属于私密数据。conversation ID 只隔离状态，不等于身份认证。</p></article>
+      <article class="card lesson"><div class="lesson-top"><span class="lesson-mark">06</span><h3>最安全的流程可能没人使用</h3></div><p>A/B/C/D 逐项授权足够严格，但不符合快速投递的节奏。保留为审计模式，不强迫日常流程使用。</p></article>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head"><h2>短期边界</h2><p>停止范围漂移，只完成一个可复现、可解释的本地单用户版本。</p></div>
+    <div class="card scope">
+      <div class="scope-column do"><h3>继续做</h3><ul><li>一条命令启动公开样例</li><li>演示正常检索、无证据阻断和依赖失败</li><li>保留 session、checkpoint、trace 和固定回归测试</li><li>明确记录框架选择与限制</li><li>私有投递看板继续服务个人分析</li></ul></div>
+      <div class="scope-column dont"><h3>暂时不做</h3><ul><li>不宣称生产级、多用户或高并发</li><li>不预测简历通过率或归因拒绝原因</li><li>不继续扩展 JD 标注数量</li><li>不在网页中扩建复杂授权流程</li><li>不因为已使用 Qdrant 就默认 RAG 更优</li></ul></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head"><h2>60 秒项目回答</h2><p>用于面试开场，后续再根据追问展开。</p></div>
+    <article class="card script"><p>我在秋招中需要反复根据 JD 调整简历，发现直接与模型对话既要重复提供经历，又容易让模型把相关经验扩写成做过的事。所以我建立了带 fact ID 和边界的事实库，并用 FastAPI 和 LangGraph 实现只读事实 Agent。模型只做理解和建议，检索、哈希、授权与交付由确定性代码约束。实现中我发现模型会跳过工具、verifier 会返回错误格式，检索也会在召回和误召之间权衡，因此加入强制取证、fail-closed、有限重试和节点 trace。这个项目目前是本地单用户工程原型，不声称能提高简历通过率或具备生产 SLA。</p></article>
+  </section>
+
+  <section>
+    <div class="section-head"><h2>建议的简历表述</h2><p>把框架放在工程决策之后，不使用“生产级”和“提高通过率”。</p></div>
+    <article class="card resume">
+      <div class="resume-title">Truthful Resume Agent｜可审计的简历事实 Agent（个人工程项目）</div>
+      <ul>
+        <li>基于 FastAPI 与 LangGraph 实现受约束的事实问答 Agent，将检索、生成、校验与反思建模为显式状态图；通过 UUID 会话、SQLite checkpoint 和节点级 trace 支持状态隔离、恢复与调用追踪。</li>
+        <li>将 LLM 限制为只读建议层，使用 fact ID、内容哈希和来源审计阻断无证据措辞；实现模型超时与有限重试、工具异常 fail-closed 及结构化错误返回。</li>
+        <li>在冻结的 20+ 份目标 JD、200+ 项相关性审计上对比 keyword 与 Qdrant 语义检索；semantic 有用召回从 71% 提升至 76%，但新增 4 项明确误召，因此保持为 opt-in 策略。</li>
+      </ul>
+    </article>
+  </section>
+
+  <footer>私有事实、JD 原文和模型输出不在本页展示 · 数字均需保留实验边界</footer>
+</main>
+</body>
+</html>

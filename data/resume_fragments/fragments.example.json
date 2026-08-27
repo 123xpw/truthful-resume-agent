@@ -157,12 +157,12 @@
     "keywords": "Python, LangChain, LangGraph, 工具调用, RAG, Qdrant, fastembed, FastAPI, DeepSeek API",
     "bullets": {
       "A": [
-        "\\textbf{Agent 闭环：}基于 LangChain + LangGraph 构建对话 Agent，StateGraph 四节点「检索→生成→校验→反思」闭环，支持工具调用（search\\_facts / verify\\_fact），verify 节点按结果条件路由（未过→反思重试，最多 3 次），MemorySaver checkpoint 维护会话内状态，JSON 记忆持久化跨会话偏好。",
+        "\\textbf{Agent 闭环：}基于 LangChain + LangGraph 构建「检索→生成→校验→反思」StateGraph，支持 search\\_facts / verify\\_fact 工具调用与最多 3 次反思重试；FastAPI Runtime 以 UUID 隔离会话、SQLite checkpoint 持久化状态，并记录脱敏节点 trace。",
         "\\textbf{双路检索与评估：}构建 keyword + Qdrant 语义检索双路召回，以 4 个 JD × 11 条 fact 完整审计标签对比；semantic 的宏平均有用召回由 80\\% 升至 88\\%，有用精度由 64\\% 降至 56\\%，且数据岗出现无关误召，据此保持 semantic opt-in。",
         "\\textbf{门控与工程化：}以 FastAPI 提供 Web UI、CLI 提供 analyze / gap-check / career-trends 命令，事实库为唯一真值源，生成前用 fact\\_id 溯源 + 边界检查拦截无事实依据或过度包装的内容。"
       ],
       "B": [
-        "\\textbf{对话 Agent：}基于 LangChain + LangGraph 串联检索、生成、校验、反思四个节点，用工具调用查询事实库，并以 checkpoint 和 JSON 分别维护会话内状态与跨会话偏好。",
+        "\\textbf{对话 Agent：}基于 LangChain + LangGraph 串联检索、生成、校验、反思四节点，用工具调用查询事实库；FastAPI Runtime 以 UUID 隔离会话，并用本地 SQLite checkpoint 保存状态。",
         "\\textbf{双路检索与评估：}构建 keyword + Qdrant 语义检索双路召回，在 4 个 JD 上对比审计标签后保持 semantic opt-in。",
         "\\textbf{门控与工程化：}通过 FastAPI Web UI 与 CLI 提供 JD 分析和缺口追踪，生成前用 fact\\_id 溯源与边界检查过滤过度包装的输出。"
       ]

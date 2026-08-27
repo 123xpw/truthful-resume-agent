@@ -5,8 +5,8 @@
 [![CI](https://github.com/123xpw/truthful-resume-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/123xpw/truthful-resume-agent/actions/workflows/ci.yml)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
 
-**An evidence-grounded local workflow for turning a job description into a
-defensible, traceable resume.**
+**A local engineering prototype for keeping resume assistance inside explicit,
+traceable fact boundaries.**
 
 DeepSeek may interpret the JD, rank already-authorized material, and suggest
 revisions. Deterministic checks protect the facts and delivery path; the
@@ -17,6 +17,13 @@ candidate remains the only wording authority.
 > The system intentionally cannot approve resume claims on the candidate's
 > behalf.
 
+The project began as a personal campus-recruiting tool: repeatedly pasting the
+same experience history into model conversations was wasteful, while model
+memory and factual restraint were unreliable. It does not claim to predict
+screening outcomes or improve resume pass rates. Its narrower question is how
+to make evidence, state, and failure visible when an LLM explains private
+career facts.
+
 ## The Control Model
 
 | AI advises | Code constrains | Candidate authorizes |
@@ -26,6 +33,17 @@ candidate remains the only wording authority.
 The project deliberately separates evidence, wording authorization, JD fit,
 and delivery. No prompt is allowed to collapse those decisions into one model
 response.
+
+### Why an Agent and why LangGraph?
+
+The fixed `prepare -> authorize -> finalize -> deliver` pipeline does not need
+an Agent. The Agent exists only for open-ended, multi-turn fact questions where
+the user may ask for more evidence or a repaired answer. LangChain supplies
+replaceable message/model/tool adapters. LangGraph makes the
+`retrieve -> generate -> verify -> reflect` state, conditional repair loop,
+checkpoint, and node trace explicit; this small graph could also be written as
+a plain Python state machine. Framework choice is an implementation trade-off,
+not the product value or a production-readiness claim.
 
 ## Five-Minute Start — No API Key
 
@@ -275,6 +293,23 @@ and boundaries, chat content, or resume text to the configured provider. The
 tool does not automatically redact those inputs. Use `--no-llm` and the default
 deterministic selector when the data must stay fully local.
 
+## Optional read-only Feishu application ledger
+
+The Web UI treats a Feishu spreadsheet as the operational application ledger and keeps versioned local snapshots for deterministic decision support. The integration is read-only, makes zero LLM calls, and deduplicates unchanged content.
+
+Create an internal Feishu app with spreadsheet read permission, grant that app access to the target document, and place the following values only in the ignored local `.env`:
+
+```dotenv
+RESUME_AGENT_FEISHU_SPREADSHEET_URL=https://example.feishu.cn/sheets/REPLACE_ME
+RESUME_AGENT_FEISHU_APP_ID=
+RESUME_AGENT_FEISHU_APP_SECRET=
+RESUME_AGENT_FEISHU_SHEET_ID=
+RESUME_AGENT_FEISHU_RANGE=A1:Z500
+RESUME_AGENT_FEISHU_TIMEOUT_SECONDS=10
+```
+
+The page renders the last local snapshot immediately and then performs one background read-only sync; failure preserves the last successful dashboard. The local database stores normalized snapshots, source revisions, and sync timestamps, but never the App Secret or `tenant_access_token`. The main UI is a single application cockpit: four current metrics, stage distribution, priority-by-stage bars, and at most five deterministic focus items. Full row detail stays in Feishu. Legacy outcome and local resume-link APIs remain available for compatibility/experimentation but are not shown in the daily UI. Feishu remains authoritative.
+
 ## Evaluation
 
 The matcher report is based on a complete 4-JD x 11-fact audit matrix:
@@ -294,6 +329,17 @@ baseline and the actual embedded-Qdrant `query_points` path. On the current
 desensitized facts, keyword Recall@5 is 0.50; Qdrant semantic Recall@5 is 1.00
 and MRR is 0.80. The small set is a regression fixture, not a production
 benchmark or resume claim.
+
+A separate private single-run decision experiment compared full structured
+fact context with the Agent's keyword top-5 context over five diverse target
+JDs and 11 facts. Full context recovered 29/31 useful labels (93.5%) versus
+14/31 (45.2%) for keyword top-5, with nearly identical useful precision
+(70.7% versus 70.0%). Its average prompt was about twice as long (14.5k versus
+7.4k characters) and slower in that run (6.2s versus 3.8s). This supports full
+context as the current small-bank baseline, not unrestricted model selection:
+the model selected more marginal material and still requires deterministic
+boundaries. Private JDs, facts, prompts, and outputs remain outside Git. This is
+a decision aid, not a statistical benchmark or pass-rate result.
 
 The Agent suite adds 24 fixed scenarios covering supported and unsupported
 queries, verifier repair, malformed verifier output, and bounded fail-closed
@@ -334,6 +380,8 @@ Run `.venv/bin/python backend/run_cli.py --help` for every option.
 .venv/bin/python -m backend.resume_agent.agent.test_agent
 .venv/bin/python -m backend.resume_agent.agent.test_runtime
 .venv/bin/python -m backend.resume_agent.test_outcomes
+.venv/bin/python -m backend.resume_agent.test_feishu_sync
+.venv/bin/python -m backend.resume_agent.test_feishu_links
 .venv/bin/python -m backend.resume_agent.agent_eval
 .venv/bin/python -m backend.resume_agent.eval_matchers
 .venv/bin/python -m backend.resume_agent.rag_eval
@@ -379,27 +427,34 @@ docker compose up --build
 ```
 
 On macOS, after the local environment is installed, double-click
-`启动投递看板.command`; use `停止投递看板.command` to stop its background server.
+`启动投递看板.command`. The launcher safely replaces its own stale process and
+enables local code reload so a new page cannot silently talk to an old API. Use
+`停止投递看板.command` to stop its background server.
 
-Open <http://127.0.0.1:8000> for JD analysis, application status, the local
-outcome tracker, gap trends, mastery history, and interview feedback. The
-outcome tracker records and edits local status events, archives/restores them
-without physical deletion, and can link an allowed output/delivery PDF by
-SHA256. Delivery-folder cards provide one-click status updates. These
-operations make zero LLM calls. Open <http://127.0.0.1:8000/docs> for the API contract. Docker
+Open <http://127.0.0.1:8000> for the optional personal application cockpit;
+it is an operations extension rather than the core Agent workflow. It verifies
+the API contract, renders the last successful Feishu snapshot immediately, and
+then performs one background read. The daily page does not reproduce the
+source table, local outcome entry, PDF links, or experimental timelines. Its
+separate [job-analysis page](http://127.0.0.1:8000/job-analysis) builds a
+per-requirement evidence matrix: every positive match cites a fact ID and
+boundaries, while unsupported technologies fail closed. Previewed JD text is
+not saved and the endpoint makes zero LLM calls. The static
+[project-review page](http://127.0.0.1:8000/project-review) records the origin,
+framework trade-offs, context experiment, engineering lessons, and interview
+boundaries without exposing private inputs. Open <http://127.0.0.1:8000/docs>
+for the API contract. Docker
 excludes private runtime files from the image context;
 the base Compose service receives no key, while the optional ignored override
 injects one at runtime. Named volumes persist checkpoints, outcome events, and indexes.
 Authorization, finalization, AEO, and canonical registration remain CLI
 operations in the current MVP.
 
-Outcome state lives in a local SQLite database. The first open imports the
-legacy ignored `application_outcomes.json` once without modifying it. Every
-mutation creates a rolling local backup, while the dashboard exposes database
-integrity, data mode, archive restore, and JSON/CSV export. The default mode is
-`preview`: keep another copy of real records until backup/restore and pilot
-checks have passed. Database files, backups, PDFs, and legacy outcome JSON stay
-outside Git and the public Docker image.
+Compatibility outcome APIs keep state in a local SQLite database and can import
+the ignored legacy `application_outcomes.json` once without modifying it.
+Backup, restore, archive, and export remain available through the API but are
+not shown in the daily cockpit. Database files, backups, PDFs, and legacy
+outcome JSON stay outside Git and the public Docker image.
 
 Design details are in [`docs/technical_design.md`](docs/technical_design.md),
 [`docs/risk_policy.md`](docs/risk_policy.md), and

@@ -104,6 +104,15 @@ facts, authorizations, provenance confirmations, or delivered artifacts.
 - Filename warnings such as `未验证勿投递` and `废弃` remain visible; the
   tracker records observed history but does not certify that a file was safe to
   submit.
+- Feishu synchronization starts read-only. App credentials and spreadsheet
+  tokens stay in ignored local configuration, are never returned by the API or
+  persisted in SQLite, and must not be included in public logs or examples.
+- A missing Feishu row never deletes local JD, resume, authorization, or audit
+  evidence. Remote write-back requires a separate policy and is out of scope for
+  the first synchronization slice.
+- Feishu-to-application links are local metadata bound to a row identity hash
+  and optional PDF SHA256. A changed row or artifact is reported as stale;
+  unlinking archives local metadata and never deletes the remote row or resume.
 - The default `preview` mode is not an authorization to discard the user's
   independent source records. Promotion to `pilot` or `trusted` is a deliberate
   operational decision after migration, restart, concurrency, backup, restore,

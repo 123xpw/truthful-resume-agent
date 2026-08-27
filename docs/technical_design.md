@@ -24,6 +24,7 @@ The project evolved from a single-module CLI tool into a three-layer system: cor
 backend/resume_agent/
 ├── core decision layer (CLI pipeline)
 │   ├── analyzer.py            # dual-matcher: keyword + semantic
+│   ├── job_analysis.py         # per-requirement deterministic evidence preview
 │   ├── rules.py               # Fact + NOT_WRITABLE_TECH (evidence-driven)
 │   ├── fact_store.py          # single source of truth for facts
 │   ├── jd_insight.py          # Tier A (rule) + Tier B (LLM) + 4 guardrails
@@ -63,7 +64,7 @@ backend/resume_agent/
 │
 ├── web/ (FastAPI UI layer)
 │   ├── app.py                  # REST endpoints + static serving
-│   └── templates/index.html    # 5-tab SPA (vanilla JS, no build step)
+│   └── templates/index.html    # single read-only application cockpit
 │
 └── memory evolution (three-layer feedback loop)
     ├── interview_feedback.py   # record-interview: interview Q&A → boundary回写
@@ -75,6 +76,9 @@ backend/resume_agent/
 
 ```text
 User JD input
+  → FastAPI preview (`/api/job-analysis/preview`)
+     → job_analysis.py: explicit list extraction + per-item fact evidence
+     → zero LLM calls, no JD persistence, fact_id/boundary citations
   → CLI (prepare)
      → analyzer.py: keyword + semantic dual-matcher (merge_keyword_floor)
      → rules.py: find_not_writable (evidence-driven blocklist)
@@ -142,7 +146,7 @@ data/outputs/
 
 ### JSON Metadata
 
-Application metadata (companies, job titles, job types, JD source path, decision status, generated output path, manual confirmation status) is stored as JSON/plain files under `data/outputs/<application>/`. There is no SQLite database; the MVP keeps everything in human-editable files.
+Resume-build metadata (job type, JD source path, decision state, generated output path, and manual confirmation state) remains in human-editable JSON/plain files under `data/outputs/<application>/`. Runtime state is separate: Agent checkpoints, observed outcome events, and optional Feishu snapshots use local SQLite databases. The files remain the source of truth for resume construction; SQLite supports runtime history and analysis.
 
 ### Vector Index
 
@@ -172,7 +176,9 @@ For pasted input, the system should:
 4. Save metadata to JSON under `data/outputs/<application>/`.
 5. Run analysis on the saved JD.
 
-The raw JD must be preserved. The parsed version is derived data.
+The raw JD must be preserved after the user enters the saved application
+workflow. The separate `/api/job-analysis/preview` endpoint is intentionally
+non-persistent: it analyzes pasted text without creating a JD-memory file.
 
 ## Fact Chunk Schema
 
@@ -206,23 +212,41 @@ Each retrievable fact chunk should contain:
 }
 ```
 
-## Match Schema
+## Deterministic Preview Match Schema
 
 ```json
 {
   "requirement_id": "jd_req_004",
-  "fact_ids": [],
-  "match_level": "not_writable",
-  "reason": "No fact-bank project shows RAG or vector database implementation.",
-  "recommended_action": "Do not write RAG experience. Mark as study/project gap."
+  "kind": "hard_requirement",
+  "jd_text": "Understand RAG and MCP.",
+  "evidence_level": "not_writable",
+  "evidence": [
+    {
+      "fact_id": "project_truthful_resume_agent_rag_qdrant",
+      "support": "direct",
+      "matched_keywords": ["RAG"],
+      "boundaries": ["No MCP implementation."]
+    }
+  ],
+  "blocked_claims": [
+    {"term": "MCP", "source": "technology_guardrail"}
+  ],
+  "has_mixed_evidence": true
 }
 ```
 
-Match levels:
+Preview evidence levels:
 
-- `strong`: direct project or internship evidence.
-- `weak`: related experience but incomplete implementation.
-- `not_writable`: no supporting evidence.
+- `direct_support`: an exact supported aspect is present in a fact summary, or
+  one fact matches at least two explicit keywords.
+- `partial_support`: an exact keyword is present but the fact summary does not
+  establish equivalent support.
+- `no_evidence`: the current fact bank has no corresponding evidence.
+- `not_writable`: an explicit technology or claim-strength boundary remains
+  unsupported; mixed lines fail closed while retaining their supported facts.
+
+The level applies to support found within one source list item. It is not a
+claim that every clause in a compound requirement is satisfied.
 
 ## Retrieval
 
@@ -345,9 +369,13 @@ returns a `trace_id`.
 - Provider timeouts return a structured 504 after bounded retries.
 - Exhausted verifier repair is a domain-level `blocked` result, not a transport
   failure and not a verified answer.
-- `/api/analyze` may explicitly fall back from semantic to keyword retrieval;
-  the response reports `requested_matcher`, `used_matcher`, warnings, and
-  `degraded=true`.
+- The interactive page uses keyword retrieval and a 15-second client timeout.
+  `/api/analyze` will not cold-download an embedding model: semantic requests
+  fall back immediately unless `RESUME_AGENT_WEB_SEMANTIC_ENABLED=1` is set
+  after local model preparation. Responses report `requested_matcher`,
+  `used_matcher`, warnings, and `degraded=true`.
+- `/api/meta` exposes a small API contract version. The page disables actions
+  and requests a restart when current HTML is served by a stale backend.
 
 ### Chat REPL Commands
 
@@ -399,7 +427,17 @@ FastAPI-based web UI (`backend/resume_agent/web/`):
 - `app.py` — REST endpoints for JD analysis, application status, gap trends,
   mastery history, interview feedback, local outcome CRUD/PDF selection,
   Agent conversations/messages/traces, health/readiness, and static SPA serving.
-- `templates/index.html` — 6-tab vanilla-JS local SPA (no build step): JD 分析 / 申请列表 / 投递看板 / 缺口趋势 / Mastery 时间线 / 面试反馈.
+- `templates/index.html` — single-page vanilla-JS application cockpit (no build step): compact sync state, four current metrics, stage distribution, priority-by-stage bars, and five deterministic focus items. Legacy/experimental workflows are not shown in the daily UI.
+- `templates/job_analysis.html` — separate deterministic JD evidence page. It
+  calls only `/api/job-analysis/preview`, enforces the response safety contract,
+  and renders exact JD items, fact IDs, boundaries, mixed evidence, and blocked
+  claims without creating a saved application.
+- `templates/project_review.html` — static project decision log and interview
+  refresher. It reads no private runtime state and records the context-strategy
+  result as a bounded design decision rather than a screening-outcome claim.
+- `feishu_sync.py` — optional read-only Feishu Sheets client plus versioned SQLite snapshots; the first slice uses explicit manual sync and performs no remote writes.
+- `feishu_analysis.py` — header-alias mapping plus deterministic dashboard semantics. `无合适岗位` is shelved rather than planning; unknown statuses stay visibly unmapped; focus ranking is assessment → interview → high-priority active → high-priority planning → missing role.
+- `feishu_links.py` — local, content-bound links from a ledger sequence to an application workflow and optional PDF hash; remote rows are never mutated.
 - Start with `.venv/bin/uvicorn backend.resume_agent.web.app:app --reload`.
 - Or run the public-example image with `docker compose up --build`.
 
@@ -414,6 +452,26 @@ User deletion sets `archived_at`; restoration clears it and appends another
 audit snapshot. Every mutation creates a verified rolling SQLite backup, and a
 full restore first creates a safety backup. JSON/CSV export includes archived
 history.
+
+Feishu sync uses an app-scoped bearer token to discover the configured or first
+visible worksheet and read a bounded cell range. It stores content hashes,
+source revisions, timestamps, and normalized row snapshots in additive SQLite tables.
+Trailing empty rows and columns from a bounded API range are removed without
+changing any populated cell.
+Unchanged content updates freshness without adding a duplicate snapshot. The
+page renders the last successful snapshot first, then performs one background
+sync and preserves the old dashboard on failure. The spreadsheet remains
+authoritative; local outcome CRUD is retained as a compatibility/emergency API
+but is not exposed in the daily cockpit.
+The tenant token is cached only in process memory and refreshed ten minutes
+before reported expiry. A rejected token invalidates the cache and permits one
+forced refresh/retry; credentials and bearer tokens are never persisted.
+
+Local application links use the ledger's unique sequence plus a hash of the
+sequence/company/role/application-date identity. They also record the selected
+PDF SHA256. A changed row, missing/replaced PDF, missing workflow, failed
+canonical audit, or audit/PDF hash mismatch remains visible instead of being silently accepted. Unlinking
+archives local metadata and never changes the remote spreadsheet.
 
 Existing private `application_outcomes.json` records receive stable legacy IDs
 and are imported once without mutating the source. Native runs default to

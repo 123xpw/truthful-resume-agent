@@ -55,6 +55,21 @@ jobs:
       - name: Run local outcome tracker tests
         run: python -m backend.resume_agent.test_outcomes
 
+      - name: Run read-only Feishu sync and ledger analysis tests
+        run: python -m backend.resume_agent.test_feishu_sync
+
+      - name: Run Feishu application-link tests
+        run: python -m backend.resume_agent.test_feishu_links
+
+      - name: Run deterministic job-analysis tests
+        run: python -m backend.resume_agent.test_job_analysis
+
+      - name: Run matcher cohort and label-contract tests
+        run: python -m backend.resume_agent.test_matcher_eval
+
+      - name: Run context-strategy evaluation tests
+        run: python -m backend.resume_agent.test_context_strategy_eval
+
       - name: Run fixed Agent regression cases
         run: python -m backend.resume_agent.agent_eval
 

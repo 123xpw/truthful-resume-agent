@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>岗位匹配分析</title>
+<style>
+  :root {
+    --ink: #172033;
+    --muted: #667085;
+    --line: #e5e9f0;
+    --surface: #ffffff;
+    --canvas: #f5f7fb;
+    --navy: #173b73;
+    --blue: #3478f6;
+    --green: #278f67;
+    --amber: #b96f10;
+    --red: #b7433d;
+    --purple: #7656b8;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--canvas); color: var(--ink); font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Noto Sans CJK SC", sans-serif; line-height: 1.55; }
+  button, textarea, a { font: inherit; }
+  .hero { color: white; background: linear-gradient(118deg, #102f61 0%, #1d4f8e 58%, #246a9a 100%); padding: 2.15rem max(1.25rem, calc((100vw - 1180px) / 2)) 2.7rem; }
+  .hero-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
+  .eyebrow { margin: 0 0 0.35rem; font-size: 0.7rem; font-weight: 800; letter-spacing: 0.14em; opacity: 0.68; }
+  h1 { margin: 0; font-size: clamp(1.75rem, 4vw, 2.5rem); line-height: 1.18; }
+  .hero-copy { margin: 0.55rem 0 0; max-width: 720px; font-size: 0.92rem; opacity: 0.82; }
+  .nav-link { display: inline-flex; align-items: center; justify-content: center; min-height: 38px; padding: 0.45rem 0.82rem; border: 1px solid rgba(255,255,255,0.25); border-radius: 9px; color: white; background: rgba(255,255,255,0.1); text-decoration: none; white-space: nowrap; }
+  .nav-link:hover { background: rgba(255,255,255,0.17); }
+  main { width: min(1180px, calc(100% - 2rem)); margin: -1rem auto 2.5rem; }
+  .card { border: 1px solid var(--line); border-radius: 16px; background: var(--surface); box-shadow: 0 8px 24px rgba(25,49,84,0.05); }
+  .input-card { padding: 1.25rem; }
+  .section-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
+  .section-heading h2 { margin: 0; font-size: 1.05rem; }
+  .section-copy { margin: 0.25rem 0 1rem; color: var(--muted); font-size: 0.8rem; }
+  .safety-badge { padding: 0.25rem 0.58rem; border-radius: 999px; color: #176846; background: #eaf8f1; font-size: 0.72rem; font-weight: 720; white-space: nowrap; }
+  label { display: block; margin-bottom: 0.42rem; color: #344054; font-size: 0.8rem; font-weight: 720; }
+  textarea { display: block; width: 100%; min-height: 220px; resize: vertical; padding: 0.9rem; border: 1px solid #ccd4e0; border-radius: 11px; color: var(--ink); background: #fbfcfe; outline: none; }
+  textarea:focus { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(52,120,246,0.12); background: white; }
+  .form-footer { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-top: 0.8rem; }
+  .privacy-note { color: var(--muted); font-size: 0.75rem; }
+  .primary { min-height: 40px; padding: 0.52rem 1rem; border: 0; border-radius: 9px; color: white; background: var(--navy); cursor: pointer; font-weight: 720; }
+  .primary:hover { background: #204b88; }
+  .primary:disabled { opacity: 0.5; cursor: wait; }
+  .notice { display: none; margin-top: 0.85rem; padding: 0.75rem 0.9rem; border-radius: 10px; font-size: 0.8rem; }
+  .notice.error { display: block; color: #96312c; background: #fff0ef; border: 1px solid #f1bbb7; }
+  .notice.info { display: block; color: #694500; background: #fff7e8; border: 1px solid #f1d69c; }
+  #result { display: none; }
+  .result-header { display: flex; align-items: flex-end; justify-content: space-between; gap: 1rem; margin: 1.35rem 0 0.8rem; }
+  .result-header h2 { margin: 0; font-size: 1.15rem; }
+  .result-meta { color: var(--muted); font-size: 0.78rem; }
+  .metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.75rem; margin-bottom: 0.9rem; }
+  .metric { padding: 0.9rem 1rem; border: 1px solid var(--line); border-top: 3px solid var(--metric-color); border-radius: 12px; background: white; }
+  .metric-value { font-size: 1.55rem; font-weight: 780; line-height: 1.15; color: var(--metric-color); }
+  .metric-label { margin-top: 0.25rem; color: var(--muted); font-size: 0.75rem; }
+  .interpretation { margin-bottom: 0.9rem; padding: 0.78rem 0.9rem; border: 1px solid #d7e3f4; border-radius: 11px; color: #35516f; background: #f3f7fd; font-size: 0.78rem; }
+  .toolbar { display: flex; align-items: center; justify-content: space-between; gap: 0.8rem; flex-wrap: wrap; margin: 0.9rem 0; }
+  .filters { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+  .filter { padding: 0.32rem 0.65rem; border: 1px solid #d8dee8; border-radius: 999px; color: #475467; background: white; cursor: pointer; font-size: 0.75rem; }
+  .filter.active { color: white; border-color: var(--navy); background: var(--navy); }
+  .legend { color: var(--muted); font-size: 0.73rem; }
+  .requirements { display: grid; gap: 0.75rem; }
+  .requirement { overflow: hidden; border: 1px solid var(--line); border-left: 4px solid var(--level-color); border-radius: 13px; background: white; }
+  .requirement-main { padding: 1rem 1.05rem; }
+  .requirement-top { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; }
+  .badges { display: flex; flex-wrap: wrap; gap: 0.38rem; }
+  .badge { padding: 0.15rem 0.48rem; border-radius: 999px; color: #475467; background: #eef2f7; font-size: 0.7rem; font-weight: 700; }
+  .badge.level { color: var(--level-color); background: color-mix(in srgb, var(--level-color) 10%, white); }
+  .requirement-id { color: #98a2b3; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.67rem; }
+  .jd-text { margin: 0.68rem 0 0.4rem; font-size: 0.92rem; font-weight: 690; }
+  .rationale { margin: 0; color: var(--muted); font-size: 0.76rem; }
+  .blocked { margin-top: 0.75rem; padding: 0.68rem 0.78rem; border-radius: 9px; color: #90352f; background: #fff2f1; font-size: 0.76rem; }
+  .blocked strong { display: block; margin-bottom: 0.25rem; }
+  .blocked-item + .blocked-item { margin-top: 0.25rem; }
+  details { border-top: 1px solid var(--line); background: #fbfcfe; }
+  summary { padding: 0.72rem 1.05rem; color: #344054; cursor: pointer; font-size: 0.76rem; font-weight: 700; }
+  .evidence-list { display: grid; gap: 0.55rem; padding: 0 1.05rem 0.9rem; }
+  .evidence { padding: 0.72rem; border: 1px solid #e1e6ed; border-radius: 9px; background: white; }
+  .evidence-title { font-size: 0.79rem; font-weight: 730; }
+  code { padding: 0.08rem 0.28rem; border-radius: 4px; color: #244d82; background: #edf3fb; font-size: 0.7rem; overflow-wrap: anywhere; }
+  .matched { margin: 0.35rem 0; color: #475467; font-size: 0.72rem; }
+  .fact-summary { margin: 0.35rem 0; color: #344054; font-size: 0.75rem; }
+  .boundaries { margin: 0.4rem 0 0; padding-left: 1.1rem; color: var(--muted); font-size: 0.71rem; }
+  .empty { padding: 1.5rem; text-align: center; color: var(--muted); font-size: 0.82rem; }
+  footer { margin-top: 1.2rem; text-align: center; color: var(--muted); font-size: 0.72rem; }
+  @media (max-width: 720px) {
+    .hero { padding: 1.5rem 1rem 2.2rem; }
+    main { width: min(100% - 1rem, 1180px); }
+    .hero-row, .section-heading, .form-footer, .result-header { align-items: stretch; flex-direction: column; }
+    .nav-link { align-self: flex-start; }
+    .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    textarea { min-height: 260px; }
+    .primary { width: 100%; }
+    .requirement-top { align-items: flex-start; flex-direction: column; }
+  }
+</style>
+</head>
+<body>
+<header class="hero">
+  <div class="hero-row">
+    <div>
+      <p class="eyebrow">EVIDENCE-GROUNDED JOB REVIEW</p>
+      <h1>岗位匹配分析</h1>
+      <p class="hero-copy">逐条核对岗位要求、已有证据与不可写边界，不用一个模糊分数代替判断。</p>
+    </div>
+    <nav style="display:flex;gap:0.55rem;flex-wrap:wrap" aria-label="页面导航">
+      <a class="nav-link" href="/">投递分析</a>
+      <a class="nav-link" href="/project-review">项目复盘</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <section class="card input-card">
+    <div class="section-heading">
+      <div>
+        <h2>岗位描述</h2>
+        <p class="section-copy">建议保留“岗位职责、任职要求、加分项”等标题和列表结构。</p>
+      </div>
+      <span class="safety-badge">本地确定性预览</span>
+    </div>
+    <form id="analysis-form">
+      <label for="jd-text">粘贴 JD 原文</label>
+      <textarea id="jd-text" name="jd_text" maxlength="100000" placeholder="例如：&#10;## 岗位要求&#10;- 熟悉 Python、FastAPI 与 LangGraph&#10;- 具备生产级系统经验" required></textarea>
+      <div class="form-footer">
+        <span class="privacy-note">不保存本次 JD · 不调用 LLM · 不生成简历措辞</span>
+        <button id="analyze-button" class="primary" type="submit">生成证据矩阵</button>
+      </div>
+    </form>
+    <div id="notice" class="notice" role="status"></div>
+  </section>
+
+  <section id="result" aria-live="polite">
+    <div class="result-header">
+      <div>
+        <h2>要求与证据</h2>
+        <div id="result-meta" class="result-meta"></div>
+      </div>
+      <div id="structure-meta" class="result-meta"></div>
+    </div>
+
+    <div class="metrics" aria-label="证据矩阵统计">
+      <article class="metric" style="--metric-color:var(--green)"><div id="count-direct" class="metric-value">0</div><div class="metric-label">有直接支持点</div></article>
+      <article class="metric" style="--metric-color:var(--amber)"><div id="count-partial" class="metric-value">0</div><div class="metric-label">仅部分支持</div></article>
+      <article class="metric" style="--metric-color:var(--muted)"><div id="count-none" class="metric-value">0</div><div class="metric-label">当前无证据</div></article>
+      <article class="metric" style="--metric-color:var(--red)"><div id="count-blocked" class="metric-value">0</div><div class="metric-label">存在不可写项</div></article>
+    </div>
+
+    <div id="interpretation" class="interpretation"></div>
+    <div class="toolbar">
+      <div id="filters" class="filters" aria-label="要求类别筛选"></div>
+      <span class="legend">证据命中 ≠ 完整满足整条复合要求</span>
+    </div>
+    <div id="requirements" class="requirements"></div>
+  </section>
+
+  <footer>证据来自本地 fact bank · 所有正向匹配均显示 fact ID 与事实边界</footer>
+</main>
+
+<script>
+const API_CONTRACT = '2026-08-26.2';
+const endpoint = '/api/job-analysis/preview';
+const labels = {
+  responsibility: '岗位职责', hard_requirement: '硬性要求', bonus: '加分项', unclassified: '未分类',
+  direct_support: '有直接支持点', partial_support: '仅部分支持', no_evidence: '当前无证据', not_writable: '存在不可写项'
+};
+const colors = {direct_support:'#278f67', partial_support:'#b96f10', no_evidence:'#7a8494', not_writable:'#b7433d'};
+let currentRows = [];
+let activeFilter = 'all';
+
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, character => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[character]));
+}
+
+function showNotice(text = '', kind = '') {
+  const notice = document.getElementById('notice');
+  notice.textContent = text;
+  notice.className = kind ? `notice ${kind}` : 'notice';
+}
+
+function renderEvidence(items = []) {
+  if (!items.length) return '';
+  return `<details><summary>查看 ${items.length} 条事实证据</summary><div class="evidence-list">${items.map(item => `
+    <article class="evidence">
+      <div class="evidence-title">${escapeHtml(item.title)} · <code>${escapeHtml(item.fact_id)}</code></div>
+      <div class="matched">${item.support === 'direct' ? '直接' : '部分'}支持 · 命中：${item.matched_keywords.map(escapeHtml).join('、')}</div>
+      <p class="fact-summary">${escapeHtml(item.summary)}</p>
+      ${item.boundaries?.length ? `<ul class="boundaries">${item.boundaries.map(boundary => `<li>${escapeHtml(boundary)}</li>`).join('')}</ul>` : ''}
+    </article>`).join('')}</div></details>`;
+}
+
+function renderBlocked(items = []) {
+  if (!items.length) return '';
+  return `<div class="blocked"><strong>不可直接写入简历的内容</strong>${items.map(item => `
+    <div class="blocked-item"><code>${escapeHtml(item.term)}</code> — ${escapeHtml(item.reason)}</div>`).join('')}</div>`;
+}
+
+function renderRows() {
+  const target = document.getElementById('requirements');
+  const rows = activeFilter === 'all' ? currentRows : currentRows.filter(row => row.kind === activeFilter);
+  if (!rows.length) { target.innerHTML = '<div class="card empty">当前筛选下没有要求。</div>'; return; }
+  target.innerHTML = rows.map(row => `
+    <article class="requirement" style="--level-color:${colors[row.evidence_level]}">
+      <div class="requirement-main">
+        <div class="requirement-top">
+          <div class="badges"><span class="badge">${labels[row.kind]}</span><span class="badge level">${labels[row.evidence_level]}</span>${row.has_mixed_evidence ? '<span class="badge">混合证据</span>' : ''}</div>
+          <span class="requirement-id">${escapeHtml(row.requirement_id)}</span>
+        </div>
+        <p class="jd-text">${escapeHtml(row.jd_text)}</p>
+        <p class="rationale">${escapeHtml(row.rationale)}</p>
+        ${renderBlocked(row.blocked_claims)}
+      </div>
+      ${renderEvidence(row.evidence)}
+    </article>`).join('');
+}
+
+function setFilter(kind) {
+  activeFilter = kind;
+  document.querySelectorAll('.filter').forEach(button => button.classList.toggle('active', button.dataset.kind === kind));
+  renderRows();
+}
+
+function renderFilters(counts) {
+  const items = [
+    ['all', '全部', currentRows.length], ['hard_requirement', '硬性要求', counts.hard_requirement],
+    ['responsibility', '岗位职责', counts.responsibility], ['bonus', '加分项', counts.bonus],
+    ['unclassified', '未分类', counts.unclassified]
+  ].filter(([, , count]) => count > 0);
+  document.getElementById('filters').innerHTML = items.map(([kind, label, count]) =>
+    `<button class="filter ${kind === activeFilter ? 'active' : ''}" type="button" data-kind="${kind}">${label} ${count}</button>`
+  ).join('');
+  document.querySelectorAll('.filter').forEach(button => button.addEventListener('click', () => setFilter(button.dataset.kind)));
+}
+
+function renderResult(payload) {
+  currentRows = payload.requirements || [];
+  activeFilter = 'all';
+  const levels = payload.summary.by_evidence_level;
+  document.getElementById('count-direct').textContent = levels.direct_support;
+  document.getElementById('count-partial').textContent = levels.partial_support;
+  document.getElementById('count-none').textContent = levels.no_evidence;
+  document.getElementById('count-blocked').textContent = levels.not_writable;
+  document.getElementById('result-meta').textContent = `${payload.job_type} · 共 ${payload.summary.total_requirements} 条明确要求`;
+  const structureLabels = {markdown_headings:'已识别 Markdown 标题', plain_headings:'已识别文本标题', unclassified_list:'未识别章节结构'};
+  document.getElementById('structure-meta').textContent = structureLabels[payload.structure] || payload.structure;
+  document.getElementById('interpretation').textContent = payload.interpretation.note;
+  renderFilters(payload.summary.by_kind);
+  renderRows();
+  document.getElementById('result').style.display = 'block';
+  if (payload.warnings?.length) showNotice(payload.warnings.map(item => item.message).join(' '), 'info');
+  else showNotice();
+  document.getElementById('result').scrollIntoView({behavior:'smooth', block:'start'});
+}
+
+async function verifyApi() {
+  const response = await fetch('/api/meta', {cache:'no-store'});
+  if (!response.ok) throw new Error('无法读取后台版本');
+  const metadata = await response.json();
+  if (metadata.contract_version !== API_CONTRACT || metadata.job_analysis_preview?.path !== endpoint) {
+    throw new Error('页面与后台版本不一致，请重新启动投递看板');
+  }
+}
+
+document.getElementById('analysis-form').addEventListener('submit', async event => {
+  event.preventDefault();
+  const jdText = document.getElementById('jd-text').value;
+  const button = document.getElementById('analyze-button');
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 10000);
+  button.disabled = true;
+  button.textContent = '正在分析…';
+  showNotice();
+  try {
+    await verifyApi();
+    const response = await fetch(endpoint, {
+      method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({jd_text:jdText}), signal:controller.signal
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.detail?.message || payload.detail || '分析失败');
+    if (payload.saved !== false || payload.llm_calls !== 0) throw new Error('后台未满足本地预览安全契约');
+    renderResult(payload);
+  } catch (error) {
+    showNotice(error.name === 'AbortError' ? '分析超过10秒，已停止等待。' : `分析失败：${error.message}`, 'error');
+  } finally {
+    window.clearTimeout(timeout);
+    button.disabled = false;
+    button.textContent = '生成证据矩阵';
+  }
+});
+</script>
+</body>
+</html>

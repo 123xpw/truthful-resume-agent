@@ -18,19 +18,38 @@ if [[ ! -x "$UVICORN" ]]; then
   exit 1
 fi
 
-if curl --silent --fail "http://127.0.0.1:8000/healthz" >/dev/null 2>&1; then
-  open "$URL"
-  exit 0
+if [[ -f "$PID_FILE" ]]; then
+  MANAGED_PID="$(tr -cd '0-9' <"$PID_FILE")"
+  MANAGED_COMMAND=""
+  if [[ -n "$MANAGED_PID" ]]; then
+    MANAGED_COMMAND="$(ps -p "$MANAGED_PID" -o command= 2>/dev/null || true)"
+  fi
+  if [[ "$MANAGED_COMMAND" == *"backend.resume_agent.web.app:app"* ]]; then
+    echo "正在重新启动投递看板以加载当前代码..."
+    kill "$MANAGED_PID"
+    for _ in {1..40}; do
+      if ! kill -0 "$MANAGED_PID" >/dev/null 2>&1; then
+        break
+      fi
+      sleep 0.1
+    done
+    if kill -0 "$MANAGED_PID" >/dev/null 2>&1; then
+      echo "旧投递看板未能安全停止，请先运行“停止投递看板.command”。"
+      read "?按回车键关闭..."
+      exit 1
+    fi
+  fi
+  rm -f "$PID_FILE"
 fi
 
 if lsof -nP -iTCP:8000 -sTCP:LISTEN >/dev/null 2>&1; then
-  echo "端口 8000 已被其他程序占用，投递看板未启动。"
+  echo "端口 8000 已被未受此启动器管理的程序占用，未复用未知或旧版服务。"
   read "?按回车键关闭..."
   exit 1
 fi
 
-nohup "$UVICORN" backend.resume_agent.web.app:app \
-  --host 127.0.0.1 --port 8000 >"$LOG_FILE" 2>&1 </dev/null &
+UVICORN_ARGS=(backend.resume_agent.web.app:app --host 127.0.0.1 --port 8000 --reload --reload-dir "$PROJECT_DIR/backend")
+nohup "$UVICORN" "${UVICORN_ARGS[@]}" >"$LOG_FILE" 2>&1 </dev/null &
 SERVER_PID=$!
 echo "$SERVER_PID" >"$PID_FILE"
 

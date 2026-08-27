@@ -45,13 +45,44 @@ def _format_matches(matches: list[FactMatch]) -> str:
     return "<br>".join(_match_label(match) for match in matches)
 
 
+def _expand_grouped_case(case_name: str, case: dict[str, Any]) -> dict[str, dict[str, str]]:
+    """Expand the compact v2 grouped-label format into the legacy matrix."""
+    rationale = str(case.get("rationale", "")).strip()
+    notes = case.get("notes", {})
+    if not isinstance(notes, dict):
+        raise ValueError(f"{case_name}: notes must be an object")
+    expanded: dict[str, dict[str, str]] = {}
+    for label in ("useful", "marginal", "irrelevant"):
+        fact_ids = case.get(label, [])
+        if not isinstance(fact_ids, list):
+            raise ValueError(f"{case_name}: {label} must be a list")
+        for raw_fact_id in fact_ids:
+            fact_id = str(raw_fact_id)
+            if fact_id in expanded:
+                raise ValueError(f"{case_name}: duplicate grouped label for {fact_id}")
+            note = str(notes.get(fact_id, "")).strip()
+            expanded[fact_id] = {
+                "label": label,
+                "rationale": note or rationale,
+            }
+    return expanded
+
+
 def load_audit_labels(path: Path) -> tuple[str, dict[str, dict[str, dict[str, str]]]]:
     raw: dict[str, Any] = json.loads(path.read_text(encoding="utf-8"))
     reviewer = str(raw.get("reviewer", "unknown_reviewer"))
     cases = raw.get("cases", {})
     if not isinstance(cases, dict):
         raise ValueError("matcher label file must contain an object named 'cases'")
-    return reviewer, cases
+    expanded: dict[str, dict[str, dict[str, str]]] = {}
+    for case_name, case in cases.items():
+        if not isinstance(case, dict):
+            raise ValueError(f"{case_name}: label case must be an object")
+        if any(label in case for label in ("useful", "marginal", "irrelevant")):
+            expanded[str(case_name)] = _expand_grouped_case(str(case_name), case)
+        else:
+            expanded[str(case_name)] = case
+    return reviewer, expanded
 
 
 def _sha256(path: Path) -> str:
@@ -165,6 +196,7 @@ def render_markdown(
     label_cases: dict[str, dict[str, dict[str, str]]] | None = None,
     reviewer: str | None = None,
     source_hashes: dict[str, str] | None = None,
+    evaluation_context: dict[str, Any] | None = None,
 ) -> str:
     lines: list[str] = []
     lines.append("# Matcher Evaluation")
@@ -175,6 +207,23 @@ def render_markdown(
         lines.append(
             f"Relevance labels come from `{reviewer or 'unknown'}` and are an auditable baseline, not candidate ground truth."
         )
+    if evaluation_context:
+        lines.append("")
+        lines.append("## Frozen Evaluation Scope")
+        lines.append("")
+        lines.append(f"- Cohort: `{evaluation_context.get('cohort_id', 'unspecified')}`")
+        lines.append(f"- Frozen at: `{evaluation_context.get('frozen_at', 'unspecified')}`")
+        lines.append(f"- JD count: `{evaluation_context.get('jd_count', len(evals))}`")
+        lines.append(f"- Fact count: `{evaluation_context.get('fact_count', 'unknown')}`")
+        lines.append(f"- Complete pair labels: `{evaluation_context.get('label_count', 'unknown')}`")
+        lines.append(f"- Label status: `{evaluation_context.get('label_status', 'unknown')}`")
+        role_counts = evaluation_context.get("role_counts", {})
+        if role_counts:
+            distribution = ", ".join(f"{name}={count}" for name, count in sorted(role_counts.items()))
+            lines.append(f"- Role-family distribution: {distribution}")
+        scope = str(evaluation_context.get("scope", "")).strip()
+        if scope:
+            lines.append(f"- Boundary: {scope}")
     if source_hashes:
         lines.append("")
         lines.append("## Evaluation Inputs")
@@ -216,8 +265,8 @@ def render_markdown(
 
         lines.append("### Macro Average Across JDs")
         lines.append("")
-        lines.append("| Matcher | Selected | Useful precision | Useful+marginal precision | Useful recall | Top-3 supported |")
-        lines.append("| --- | ---: | ---: | ---: | ---: | ---: |")
+        lines.append("| Matcher | Selected | Useful precision | Useful+marginal precision | Useful recall | Top-3 supported | Irrelevant selected | Zero-result JDs |")
+        lines.append("| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |")
         for matcher_name in ("keyword", "semantic"):
             metrics = []
             for item in evals:
@@ -239,6 +288,8 @@ def render_markdown(
                         _pct(sum(metric.supported_precision for metric in metrics) / count),
                         _pct(sum(metric.useful_recall for metric in metrics) / count),
                         _pct(sum(metric.top3_supported_precision for metric in metrics) / count),
+                        str(sum(len(metric.irrelevant_ids) for metric in metrics)),
+                        str(sum(metric.selected_count == 0 for metric in metrics)),
                     ]
                 )
                 + " |"
@@ -288,6 +339,30 @@ def default_jd_paths(project_root: Path) -> list[Path]:
     return sorted((project_root / "data" / "sample_jds").glob("*.md"))
 
 
+def load_cohort_paths(project_root: Path, cohort_path: Path) -> list[Path]:
+    raw = json.loads(cohort_path.read_text(encoding="utf-8"))
+    cases = raw.get("cases", [])
+    if not isinstance(cases, list) or not cases:
+        raise ValueError("cohort manifest must contain a non-empty 'cases' list")
+    jd_root = (project_root / "data" / "jd_library").resolve()
+    paths: list[Path] = []
+    seen: set[str] = set()
+    for item in cases:
+        if not isinstance(item, dict) or not str(item.get("file", "")).strip():
+            raise ValueError("every cohort case must contain a file name")
+        name = str(item["file"]).strip()
+        if name in seen:
+            raise ValueError(f"duplicate cohort JD: {name}")
+        seen.add(name)
+        path = (jd_root / name).resolve()
+        if path.parent != jd_root or path.suffix.lower() != ".md":
+            raise ValueError(f"invalid cohort JD path: {name}")
+        if not path.is_file():
+            raise ValueError(f"cohort JD is missing: {name}")
+        paths.append(path)
+    return paths
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Compare keyword and semantic matchers across JD files.")
     parser.add_argument("paths", nargs="*", type=Path, help="JD markdown files. Defaults to data/sample_jds/*.md")
@@ -304,6 +379,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Audited relevance labels. Defaults to data/evaluation/matcher_labels.json when present.",
     )
     parser.add_argument(
+        "--cohort",
+        type=Path,
+        default=None,
+        help="Frozen cohort manifest whose cases reference data/jd_library files.",
+    )
+    parser.add_argument(
         "--project-root",
         type=Path,
         default=Path(__file__).resolve().parents[2],
@@ -315,7 +396,18 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     project_root: Path = args.project_root
-    jd_paths = args.paths or default_jd_paths(project_root)
+    if args.paths and args.cohort:
+        print("Matcher evaluation failed: pass either JD paths or --cohort, not both.")
+        return 2
+    try:
+        jd_paths = args.paths or (
+            load_cohort_paths(project_root, args.cohort)
+            if args.cohort
+            else default_jd_paths(project_root)
+        )
+    except (OSError, ValueError, json.JSONDecodeError) as exc:
+        print(f"Matcher evaluation failed: invalid cohort: {exc}")
+        return 2
     if not jd_paths:
         print("No JD files found.")
         return 1
@@ -329,8 +421,10 @@ def main(argv: list[str] | None = None) -> int:
     labels_path = args.labels or project_root / "data" / "evaluation" / "matcher_labels.json"
     reviewer = None
     label_cases = None
+    label_status = "labels_not_provided"
     if labels_path.exists():
         reviewer, label_cases = load_audit_labels(labels_path)
+        label_status = str(json.loads(labels_path.read_text(encoding="utf-8")).get("status", "unspecified"))
         facts_path = resolve_facts_path(project_root / "data" / "facts" / "facts.json")
         fact_ids = {fact.id for fact in load_facts(facts_path)}
         coverage_errors = validate_label_coverage(jd_paths, fact_ids, label_cases)
@@ -341,6 +435,24 @@ def main(argv: list[str] | None = None) -> int:
             return 2
     else:
         facts_path = resolve_facts_path(project_root / "data" / "facts" / "facts.json")
+
+    evaluation_context = None
+    if args.cohort:
+        cohort_raw = json.loads(args.cohort.read_text(encoding="utf-8"))
+        role_counts: dict[str, int] = {}
+        for item in cohort_raw.get("cases", []):
+            role_family = str(item.get("role_family", "unclassified"))
+            role_counts[role_family] = role_counts.get(role_family, 0) + 1
+        evaluation_context = {
+            "cohort_id": cohort_raw.get("cohort_id", args.cohort.stem),
+            "frozen_at": cohort_raw.get("frozen_at", "unspecified"),
+            "jd_count": len(jd_paths),
+            "fact_count": len(load_facts(facts_path)),
+            "label_count": sum(len(case) for case in label_cases.values()) if label_cases else 0,
+            "label_status": label_status,
+            "role_counts": role_counts,
+            "scope": cohort_raw.get("scope", ""),
+        }
 
     output_path = args.output or project_root / "data" / "evaluation" / "matcher_report.md"
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -354,6 +466,7 @@ def main(argv: list[str] | None = None) -> int:
                 **({"labels": _sha256(labels_path)} if labels_path.exists() else {}),
                 **{f"jd:{path.name}": _sha256(path) for path in jd_paths},
             },
+            evaluation_context=evaluation_context,
         ),
         encoding="utf-8",
     )
