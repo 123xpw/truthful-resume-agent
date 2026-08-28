@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>简历技术答辩训练</title>
+<style>
+  :root {
+    --ink: #172033; --muted: #667085; --line: #dfe5ee; --surface: #fff;
+    --canvas: #f4f7fb; --navy: #173b73; --blue: #3478f6; --blue-soft: #edf4ff;
+    --red: #b7433d; --red-soft: #fff0ef; --amber: #a9660b; --amber-soft: #fff7e7;
+    --green: #237a57; --green-soft: #ebf8f1; --purple: #7152a8; --purple-soft: #f4effc;
+    --shadow: 0 12px 34px rgba(28, 51, 84, 0.07);
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; color: var(--ink); background: var(--canvas); font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Noto Sans CJK SC", sans-serif; line-height: 1.62; }
+  button, input { font: inherit; }
+  button { color: inherit; }
+  .hero { color: #fff; background: linear-gradient(120deg, #102f61 0%, #1c4d88 60%, #246a9a 100%); padding: 2rem max(1.25rem, calc((100vw - 1220px) / 2)) 3.8rem; }
+  .hero-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 1.5rem; }
+  .eyebrow { margin: 0 0 0.35rem; font-size: 0.7rem; font-weight: 800; letter-spacing: 0.14em; opacity: 0.7; }
+  h1 { margin: 0; font-size: clamp(1.9rem, 4vw, 2.7rem); line-height: 1.18; }
+  .hero-copy { max-width: 760px; margin: 0.65rem 0 0; font-size: 0.92rem; opacity: 0.85; }
+  .top-nav { display: flex; gap: 0.5rem; flex-wrap: wrap; justify-content: flex-end; }
+  .top-nav a { min-height: 38px; padding: 0.42rem 0.75rem; border: 1px solid rgba(255,255,255,0.24); border-radius: 9px; color: #fff; background: rgba(255,255,255,0.1); text-decoration: none; white-space: nowrap; }
+  .top-nav a:hover { background: rgba(255,255,255,0.17); }
+  main { width: min(1220px, calc(100% - 2rem)); margin: -2rem auto 2.5rem; }
+  .overview { padding: 1.15rem; border: 1px solid var(--line); border-radius: 17px; background: var(--surface); box-shadow: var(--shadow); }
+  .overview-top { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+  .source { display: flex; align-items: center; gap: 0.55rem; color: var(--muted); font-size: 0.75rem; }
+  .source-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--green); box-shadow: 0 0 0 4px var(--green-soft); }
+  .source-dot.example { background: var(--amber); box-shadow: 0 0 0 4px var(--amber-soft); }
+  .toolbar { display: flex; gap: 0.55rem; flex-wrap: wrap; }
+  .button { display: inline-flex; align-items: center; justify-content: center; min-height: 39px; padding: 0.48rem 0.82rem; border: 1px solid var(--line); border-radius: 10px; color: #344054; background: #fff; cursor: pointer; font-weight: 720; font-size: 0.76rem; }
+  .button:hover { border-color: #aebbd0; background: #f8fafc; }
+  .button.primary { color: #fff; border-color: var(--blue); background: var(--blue); }
+  .button.primary:hover { background: #2869db; }
+  .metrics { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 0.65rem; margin-top: 1rem; }
+  .metric { padding: 0.82rem 0.9rem; border: 1px solid var(--line); border-radius: 12px; background: #fbfcfe; }
+  .metric-value { color: var(--metric-color, var(--navy)); font-size: 1.35rem; font-weight: 820; line-height: 1.15; }
+  .metric-label { margin-top: 0.2rem; color: var(--muted); font-size: 0.68rem; }
+  .progress-track { height: 7px; margin-top: 0.9rem; overflow: hidden; border-radius: 999px; background: #edf1f6; }
+  .progress-fill { height: 100%; width: 0; border-radius: inherit; background: linear-gradient(90deg, var(--blue), var(--green)); transition: width 180ms ease; }
+  .notice { display: none; margin-top: 0.8rem; padding: 0.68rem 0.78rem; border: 1px solid #ecd39d; border-radius: 10px; color: #72500d; background: var(--amber-soft); font-size: 0.74rem; }
+  .notice.show { display: block; }
+  .workspace { display: grid; grid-template-columns: 255px minmax(0, 1fr); gap: 1rem; margin-top: 1rem; align-items: start; }
+  .sidebar { position: sticky; top: 1rem; max-height: calc(100vh - 2rem); overflow: auto; padding: 0.85rem; border: 1px solid var(--line); border-radius: 15px; background: #fff; box-shadow: 0 8px 24px rgba(25,49,84,0.04); }
+  .search { width: 100%; height: 41px; padding: 0 0.75rem; border: 1px solid var(--line); border-radius: 10px; color: var(--ink); background: #f9fbfd; outline: none; }
+  .search:focus { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(52,120,246,0.12); }
+  .topic-nav { display: grid; gap: 0.28rem; margin-top: 0.75rem; }
+  .topic-button { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.55rem; width: 100%; padding: 0.58rem 0.65rem; border: 0; border-radius: 9px; color: #475467; background: transparent; text-align: left; cursor: pointer; font-size: 0.74rem; }
+  .topic-button:hover { background: #f4f7fb; }
+  .topic-button.active { color: var(--navy); background: var(--blue-soft); font-weight: 760; }
+  .topic-count { min-width: 23px; padding: 0.04rem 0.35rem; border-radius: 999px; color: var(--muted); background: #edf1f6; text-align: center; font-size: 0.65rem; }
+  .content { min-width: 0; }
+  .content-head { display: flex; justify-content: space-between; align-items: end; gap: 1rem; margin: 0 0 0.7rem; }
+  .content-head h2 { margin: 0; font-size: 1.12rem; }
+  .content-head p { margin: 0.18rem 0 0; color: var(--muted); font-size: 0.74rem; }
+  .result-count { color: var(--muted); font-size: 0.72rem; white-space: nowrap; }
+  .topic-section + .topic-section { margin-top: 1rem; }
+  .topic-title { display: flex; align-items: center; gap: 0.55rem; margin: 0 0 0.5rem; }
+  .topic-title h3 { margin: 0; font-size: 0.98rem; }
+  .topic-index { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 8px; color: var(--navy); background: #eaf1fc; font: 800 0.68rem ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .topic-intro { margin: 0 0 0.6rem; padding: 0.65rem 0.75rem; border-left: 3px solid #aab6c7; color: var(--muted); background: #eef2f7; font-size: 0.73rem; }
+  .cards { display: grid; gap: 0.65rem; }
+  .study-card { overflow: hidden; border: 1px solid var(--line); border-left: 4px solid var(--status-color, #b9c3d1); border-radius: 13px; background: #fff; box-shadow: 0 5px 16px rgba(25,49,84,0.035); }
+  .card-question { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.8rem; width: 100%; padding: 0.9rem 1rem; border: 0; background: #fff; text-align: left; cursor: pointer; }
+  .card-question:hover { background: #fbfcfe; }
+  .question-title { font-size: 0.86rem; font-weight: 780; }
+  .question-meta { display: flex; gap: 0.5rem; align-items: center; margin-top: 0.32rem; color: var(--muted); font-size: 0.66rem; }
+  .status-chip { padding: 0.1rem 0.42rem; border-radius: 999px; color: var(--status-color); background: var(--status-soft); font-weight: 750; }
+  .reveal-label { align-self: center; color: var(--blue); font-size: 0.7rem; font-weight: 730; white-space: nowrap; }
+  .card-answer { padding: 0.95rem 1rem 1rem; border-top: 1px solid var(--line); color: #344054; background: #fcfdff; font-size: 0.79rem; }
+  .card-answer[hidden] { display: none; }
+  .markdown p { margin: 0 0 0.62rem; }
+  .markdown p:last-child { margin-bottom: 0; }
+  .markdown ul, .markdown ol { margin: 0.35rem 0 0.7rem; padding-left: 1.25rem; }
+  .markdown li + li { margin-top: 0.28rem; }
+  .markdown code { padding: 0.08rem 0.28rem; border-radius: 4px; color: #244d82; background: #eaf1fb; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.9em; }
+  .markdown pre { margin: 0.6rem 0; padding: 0.75rem; overflow: auto; border: 1px solid #dce3ed; border-radius: 9px; color: #26364d; background: #f3f6fa; line-height: 1.5; }
+  .markdown pre code { padding: 0; color: inherit; background: transparent; }
+  .markdown blockquote { margin: 0.55rem 0; padding: 0.62rem 0.78rem; border-left: 3px solid var(--purple); color: #4a3d69; background: var(--purple-soft); }
+  .markdown table { width: 100%; margin: 0.65rem 0; border-collapse: collapse; font-size: 0.72rem; }
+  .markdown th, .markdown td { padding: 0.45rem 0.52rem; border: 1px solid var(--line); text-align: left; vertical-align: top; }
+  .markdown th { color: var(--navy); background: #f0f5fc; }
+  .rating { display: flex; align-items: center; gap: 0.38rem; flex-wrap: wrap; margin-top: 0.85rem; padding-top: 0.75rem; border-top: 1px dashed #d9e0ea; }
+  .rating-label { margin-right: 0.18rem; color: var(--muted); font-size: 0.68rem; }
+  .rate { padding: 0.34rem 0.55rem; border: 1px solid var(--line); border-radius: 8px; background: #fff; cursor: pointer; font-size: 0.67rem; font-weight: 720; }
+  .rate:hover, .rate.selected { color: var(--rate-color); border-color: var(--rate-color); background: var(--rate-soft); }
+  .rate:disabled { opacity: 0.55; cursor: wait; }
+  .empty, .loading { padding: 2rem; border: 1px dashed #cbd5e1; border-radius: 14px; color: var(--muted); background: #fff; text-align: center; }
+  .error { color: var(--red); border-color: #e6b8b4; background: var(--red-soft); }
+  .toast { position: fixed; z-index: 20; right: 1rem; bottom: 1rem; transform: translateY(140%); padding: 0.65rem 0.8rem; border-radius: 10px; color: #fff; background: #23354d; box-shadow: var(--shadow); font-size: 0.72rem; transition: transform 180ms ease; }
+  .toast.show { transform: translateY(0); }
+  @media (max-width: 900px) {
+    .metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .workspace { grid-template-columns: 1fr; }
+    .sidebar { position: static; max-height: none; }
+    .topic-nav { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+  @media (max-width: 620px) {
+    .hero { padding: 1.55rem 1rem 3.4rem; }
+    .hero-row { flex-direction: column; }
+    .top-nav { justify-content: flex-start; }
+    main { width: min(100% - 1rem, 1220px); }
+    .overview-top, .content-head { align-items: flex-start; flex-direction: column; }
+    .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .topic-nav { grid-template-columns: 1fr; }
+    .card-question { grid-template-columns: 1fr; }
+    .reveal-label { justify-self: start; }
+  }
+</style>
+</head>
+<body>
+<header class="hero">
+  <div class="hero-row">
+    <div>
+      <p class="eyebrow">RESUME INTERVIEW ACTIVE RECALL</p>
+      <h1>简历技术答辩训练</h1>
+      <p class="hero-copy">先口述，再展开答案；用本地进度记录区分“不认识、模糊、能讲和已掌握”。私人手册是内容源，本页只负责复习。</p>
+    </div>
+    <nav class="top-nav" aria-label="页面导航">
+      <a href="/">投递分析</a>
+      <a href="/job-analysis">岗位分析</a>
+      <a href="/project-review">项目复盘</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <section class="overview" aria-label="复习进度概览">
+    <div class="overview-top">
+      <div>
+        <div id="source" class="source"><span class="source-dot"></span><span>正在读取本地手册…</span></div>
+      </div>
+      <div class="toolbar">
+        <button id="show-all" class="button" type="button">全部主题</button>
+        <button id="random-practice" class="button primary" type="button">随机抽 5 题</button>
+      </div>
+    </div>
+    <div id="metrics" class="metrics" aria-label="复习进度"></div>
+    <div class="progress-track" aria-hidden="true"><div id="progress-fill" class="progress-fill"></div></div>
+    <div id="example-notice" class="notice">当前展示公开脱敏示例。配置本地私人复习手册后，页面会自动读取真实内容。</div>
+  </section>
+
+  <div class="workspace">
+    <aside class="sidebar">
+      <label for="search" class="eyebrow" style="color:var(--muted); opacity:1;">SEARCH & TOPICS</label>
+      <input id="search" class="search" type="search" placeholder="搜索 Transformer、RAG…" autocomplete="off">
+      <nav id="topic-nav" class="topic-nav" aria-label="复习主题"></nav>
+    </aside>
+
+    <section class="content" aria-live="polite">
+      <div class="content-head">
+        <div><h2 id="content-title">全部主题</h2><p id="content-subtitle">点击问题前先尝试口述 60 秒。</p></div>
+        <div id="result-count" class="result-count"></div>
+      </div>
+      <div id="study-content" class="loading">正在加载复习卡片…</div>
+    </section>
+  </div>
+</main>
+
+<div id="toast" class="toast" role="status"></div>
+
+<script>
+const endpoint = '/api/interview-study';
+const statusMeta = {
+  unseen: { label: '未复习', color: '#7b8798', soft: '#eef1f5' },
+  unfamiliar: { label: '不会', color: '#b7433d', soft: '#fff0ef' },
+  fuzzy: { label: '模糊', color: '#a9660b', soft: '#fff7e7' },
+  ready: { label: '能讲 60 秒', color: '#3478f6', soft: '#edf4ff' },
+  mastered: { label: '已掌握', color: '#237a57', soft: '#ebf8f1' },
+};
+const state = { payload: null, activeTopic: 'all', query: '', practiceIds: null };
+
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"]/g, character => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[character]));
+}
+
+function inlineMarkdown(value) {
+  return escapeHtml(value)
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+}
+
+function renderMarkdown(markdown) {
+  const lines = String(markdown || '').split('\n');
+  const html = [];
+  let index = 0;
+  while (index < lines.length) {
+    const line = lines[index];
+    if (!line.trim()) { index += 1; continue; }
+    if (line.trim().startsWith('```')) {
+      const code = [];
+      index += 1;
+      while (index < lines.length && !lines[index].trim().startsWith('```')) code.push(lines[index++]);
+      index += 1;
+      html.push(`<pre><code>${escapeHtml(code.join('\n'))}</code></pre>`);
+      continue;
+    }
+    if (line.trim().startsWith('|') && index + 1 < lines.length && /^\s*\|?[\s:|-]+\|\s*$/.test(lines[index + 1])) {
+      const rows = [];
+      rows.push(line);
+      index += 2;
+      while (index < lines.length && lines[index].trim().startsWith('|')) rows.push(lines[index++]);
+      const cells = row => row.trim().replace(/^\||\|$/g, '').split('|').map(cell => cell.trim());
+      const header = cells(rows[0]);
+      html.push('<table><thead><tr>' + header.map(cell => `<th>${inlineMarkdown(cell)}</th>`).join('') + '</tr></thead><tbody>');
+      for (const row of rows.slice(1)) html.push('<tr>' + cells(row).map(cell => `<td>${inlineMarkdown(cell)}</td>`).join('') + '</tr>');
+      html.push('</tbody></table>');
+      continue;
+    }
+    if (/^\s*[-*]\s+/.test(line)) {
+      const items = [];
+      while (index < lines.length && /^\s*[-*]\s+/.test(lines[index])) items.push(lines[index++].replace(/^\s*[-*]\s+/, ''));
+      html.push('<ul>' + items.map(item => `<li>${inlineMarkdown(item)}</li>`).join('') + '</ul>');
+      continue;
+    }
+    if (/^\s*\d+\.\s+/.test(line)) {
+      const items = [];
+      while (index < lines.length && /^\s*\d+\.\s+/.test(lines[index])) items.push(lines[index++].replace(/^\s*\d+\.\s+/, ''));
+      html.push('<ol>' + items.map(item => `<li>${inlineMarkdown(item)}</li>`).join('') + '</ol>');
+      continue;
+    }
+    if (/^\s*>/.test(line)) {
+      const quote = [];
+      while (index < lines.length && /^\s*>/.test(lines[index])) quote.push(lines[index++].replace(/^\s*>\s?/, ''));
+      html.push(`<blockquote>${quote.map(part => inlineMarkdown(part)).join('<br>')}</blockquote>`);
+      continue;
+    }
+    const paragraph = [line.trim()];
+    index += 1;
+    while (index < lines.length && lines[index].trim() && !/^\s*(```|[-*]\s+|\d+\.\s+|>|\|)/.test(lines[index])) paragraph.push(lines[index++].trim());
+    html.push(`<p>${inlineMarkdown(paragraph.join(' '))}</p>`);
+  }
+  return html.join('');
+}
+
+function allCards() {
+  return (state.payload?.topics || []).flatMap(topic => topic.cards.map(card => ({ ...card, topic })));
+}
+
+function currentCounts() {
+  const counts = { unseen: 0, unfamiliar: 0, fuzzy: 0, ready: 0, mastered: 0 };
+  for (const card of allCards()) counts[card.progress.status] += 1;
+  return counts;
+}
+
+function renderMetrics() {
+  const counts = currentCounts();
+  const total = allCards().length;
+  const reviewed = total - counts.unseen;
+  const metrics = [
+    ['主题', state.payload.summary.topic_count, '#173b73'],
+    ['题目', total, '#173b73'],
+    ['不会 / 模糊', counts.unfamiliar + counts.fuzzy, '#b7433d'],
+    ['能讲 60 秒', counts.ready, '#3478f6'],
+    ['已掌握', counts.mastered, '#237a57'],
+  ];
+  document.getElementById('metrics').innerHTML = metrics.map(([label, value, color]) => `
+    <div class="metric" style="--metric-color:${color}"><div class="metric-value">${value}</div><div class="metric-label">${label}</div></div>
+  `).join('');
+  document.getElementById('progress-fill').style.width = `${total ? Math.round(reviewed / total * 100) : 0}%`;
+}
+
+function filteredTopics() {
+  const query = state.query.trim().toLocaleLowerCase();
+  return state.payload.topics.map(topic => {
+    if (state.activeTopic !== 'all' && topic.topic_id !== state.activeTopic) return null;
+    const cards = topic.cards.filter(card => {
+      if (state.practiceIds && !state.practiceIds.has(card.card_id)) return false;
+      if (!query) return true;
+      return `${topic.title}\n${card.title}\n${card.body_markdown}`.toLocaleLowerCase().includes(query);
+    });
+    return cards.length ? { ...topic, cards } : null;
+  }).filter(Boolean);
+}
+
+function renderTopicNav() {
+  const topics = state.payload.topics;
+  document.getElementById('topic-nav').innerHTML = [
+    `<button class="topic-button ${state.activeTopic === 'all' ? 'active' : ''}" data-topic="all"><span>全部主题</span><span class="topic-count">${allCards().length}</span></button>`,
+    ...topics.map(topic => `<button class="topic-button ${state.activeTopic === topic.topic_id ? 'active' : ''}" data-topic="${topic.topic_id}"><span>${escapeHtml(topic.title)}</span><span class="topic-count">${topic.cards.length}</span></button>`),
+  ].join('');
+  document.querySelectorAll('[data-topic]').forEach(button => button.addEventListener('click', () => {
+    state.activeTopic = button.dataset.topic;
+    state.practiceIds = null;
+    renderApp();
+    window.scrollTo({ top: document.querySelector('.workspace').offsetTop - 12, behavior: 'smooth' });
+  }));
+}
+
+function cardHtml(card) {
+  const meta = statusMeta[card.progress.status];
+  const last = card.progress.last_reviewed_at ? new Date(card.progress.last_reviewed_at).toLocaleDateString('zh-CN') : '尚未复习';
+  return `<article class="study-card" id="${card.card_id}" style="--status-color:${meta.color};--status-soft:${meta.soft}">
+    <button class="card-question" type="button" aria-expanded="false" aria-controls="answer-${card.card_id}" data-reveal="${card.card_id}">
+      <span><span class="question-title">${escapeHtml(card.title)}</span><span class="question-meta"><span class="status-chip">${meta.label}</span><span>${card.progress.review_count} 次 · ${last}</span></span></span>
+      <span class="reveal-label">展开答案</span>
+    </button>
+    <div class="card-answer" id="answer-${card.card_id}" hidden>
+      <div class="markdown">${renderMarkdown(card.body_markdown)}</div>
+      <div class="rating"><span class="rating-label">这次能讲到什么程度？</span>
+        ${['unfamiliar','fuzzy','ready','mastered'].map(status => {
+          const item = statusMeta[status];
+          return `<button class="rate ${card.progress.status === status ? 'selected' : ''}" type="button" data-rate="${status}" data-card="${card.card_id}" style="--rate-color:${item.color};--rate-soft:${item.soft}">${item.label}</button>`;
+        }).join('')}
+      </div>
+    </div>
+  </article>`;
+}
+
+function bindCards() {
+  document.querySelectorAll('[data-reveal]').forEach(button => button.addEventListener('click', () => {
+    const answer = document.getElementById(`answer-${button.dataset.reveal}`);
+    const opening = answer.hidden;
+    answer.hidden = !opening;
+    button.setAttribute('aria-expanded', String(opening));
+    button.querySelector('.reveal-label').textContent = opening ? '收起答案' : '展开答案';
+  }));
+  document.querySelectorAll('[data-rate]').forEach(button => button.addEventListener('click', async event => {
+    event.stopPropagation();
+    const cardId = button.dataset.card;
+    const status = button.dataset.rate;
+    const container = button.closest('.rating');
+    container.querySelectorAll('button').forEach(item => item.disabled = true);
+    try {
+      const response = await fetch(`/api/interview-study/progress/${encodeURIComponent(cardId)}`, {
+        method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({status}),
+      });
+      if (!response.ok) throw new Error('保存失败');
+      const result = await response.json();
+      const card = allCards().find(item => item.card_id === cardId);
+      card.progress = result.progress;
+      showToast(`已记录：${statusMeta[status].label}`);
+      renderApp();
+    } catch (error) {
+      container.querySelectorAll('button').forEach(item => item.disabled = false);
+      showToast(error.message || '保存失败');
+    }
+  }));
+}
+
+function renderContent() {
+  const topics = filteredTopics();
+  const count = topics.reduce((total, topic) => total + topic.cards.length, 0);
+  const active = state.payload.topics.find(topic => topic.topic_id === state.activeTopic);
+  document.getElementById('content-title').textContent = state.practiceIds ? '随机练习 · 5 题' : (active?.title || '全部主题');
+  document.getElementById('content-subtitle').textContent = state.practiceIds ? '优先抽取尚未掌握的题目。' : '点击问题前先尝试口述 60 秒。';
+  document.getElementById('result-count').textContent = `${count} 道题`;
+  const root = document.getElementById('study-content');
+  if (!topics.length) {
+    root.className = 'empty';
+    root.textContent = '没有匹配的题目，请调整搜索条件。';
+    return;
+  }
+  root.className = '';
+  root.innerHTML = topics.map((topic, index) => `<section class="topic-section">
+    <div class="topic-title"><span class="topic-index">${String(index + 1).padStart(2, '0')}</span><h3>${escapeHtml(topic.title)}</h3></div>
+    ${topic.intro_markdown ? `<div class="topic-intro markdown">${renderMarkdown(topic.intro_markdown)}</div>` : ''}
+    <div class="cards">${topic.cards.map(cardHtml).join('')}</div>
+  </section>`).join('');
+  bindCards();
+}
+
+function renderApp() {
+  renderMetrics();
+  renderTopicNav();
+  renderContent();
+}
+
+function showToast(message) {
+  const toast = document.getElementById('toast');
+  toast.textContent = message;
+  toast.classList.add('show');
+  window.clearTimeout(showToast.timer);
+  showToast.timer = window.setTimeout(() => toast.classList.remove('show'), 1800);
+}
+
+function startRandomPractice() {
+  const cards = allCards();
+  const shuffle = items => [...items].sort(() => Math.random() - 0.5);
+  const priority = shuffle(cards.filter(card => card.progress.status !== 'mastered'));
+  const fallback = shuffle(cards.filter(card => card.progress.status === 'mastered'));
+  state.practiceIds = new Set([...priority, ...fallback].slice(0, Math.min(5, cards.length)).map(card => card.card_id));
+  state.activeTopic = 'all';
+  state.query = '';
+  document.getElementById('search').value = '';
+  renderApp();
+}
+
+async function bootstrap() {
+  try {
+    const response = await fetch(endpoint, {headers: {'Accept':'application/json'}});
+    if (!response.ok) throw new Error('无法读取本地复习手册');
+    state.payload = await response.json();
+    const source = state.payload.source;
+    document.getElementById('source').innerHTML = `<span class="source-dot ${source.configured ? '' : 'example'}"></span><span>${source.configured ? '本地私人手册' : '公开脱敏示例'} · ${escapeHtml(source.filename)} · 零 LLM</span>`;
+    document.getElementById('example-notice').classList.toggle('show', !source.configured);
+    renderApp();
+  } catch (error) {
+    const root = document.getElementById('study-content');
+    root.className = 'empty error';
+    root.textContent = error.message || '加载失败';
+  }
+}
+
+document.getElementById('search').addEventListener('input', event => {
+  state.query = event.target.value;
+  state.practiceIds = null;
+  renderContent();
+});
+document.getElementById('random-practice').addEventListener('click', startRandomPractice);
+document.getElementById('show-all').addEventListener('click', () => {
+  state.activeTopic = 'all'; state.practiceIds = null; state.query = '';
+  document.getElementById('search').value = '';
+  renderApp();
+});
+bootstrap();
+</script>
+</body>
+</html>

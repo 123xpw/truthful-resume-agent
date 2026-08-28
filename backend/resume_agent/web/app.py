@@ -32,6 +32,12 @@ from ..feishu_sync import FeishuSyncError, feishu_sync_status, sync_feishu_sheet
 from ..gaps import build_gap_report, render_gap_report
 from ..gap_trends import load_snapshots
 from ..interview_feedback import load_feedback, record_feedback, render_feedback
+from ..interview_study import (
+    build_study_payload,
+    default_progress_path,
+    load_study_topics,
+    save_study_progress,
+)
 from ..job_analysis import build_job_analysis_preview
 from ..mastery_history import load_mastery_history, render_mastery_history
 from ..outcomes import (
@@ -101,6 +107,10 @@ class OutcomeBackupRestoreRequest(BaseModel):
 class FeishuApplicationLinkRequest(BaseModel):
     application: str = Field(min_length=1, max_length=120)
     resume_ref: str | None = Field(default=None, max_length=1000)
+
+
+class InterviewStudyProgressRequest(BaseModel):
+    status: Literal["unfamiliar", "fuzzy", "ready", "mastered"]
 
 
 @lru_cache(maxsize=1)
@@ -186,6 +196,12 @@ def project_review_page() -> str:
     return (TEMPLATES_DIR / "project_review.html").read_text(encoding="utf-8")
 
 
+@app.get("/interview-study", response_class=HTMLResponse)
+def interview_study_page() -> str:
+    """Local active-recall UI backed by an ignored private Markdown handbook."""
+    return (TEMPLATES_DIR / "interview_study.html").read_text(encoding="utf-8")
+
+
 @app.get("/healthz")
 def health() -> dict:
     return {"status": "ok"}
@@ -202,6 +218,11 @@ def api_meta() -> dict:
         "job_analysis_preview": {
             "path": "/api/job-analysis/preview",
             "saves_jd": False,
+            "llm_calls": 0,
+        },
+        "interview_study": {
+            "path": "/api/interview-study",
+            "progress_path": "/api/interview-study/progress/{card_id}",
             "llm_calls": 0,
         },
     }
@@ -290,6 +311,46 @@ def get_applications(project_root: Path = Depends(get_project_root)) -> dict:
             for status in list_applications(project_root)
         ]
     }
+
+
+@app.get("/api/interview-study")
+def get_interview_study(project_root: Path = Depends(get_project_root)) -> dict:
+    try:
+        return build_study_payload(project_root)
+    except (OSError, sqlite3.Error, ValueError) as exc:
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "code": "INTERVIEW_STUDY_READ_FAILED",
+                "message": "Failed to load the local interview study handbook.",
+            },
+        ) from exc
+
+
+@app.put("/api/interview-study/progress/{card_id}")
+def put_interview_study_progress(
+    card_id: str,
+    req: InterviewStudyProgressRequest,
+    project_root: Path = Depends(get_project_root),
+) -> dict:
+    topics, _source = load_study_topics(project_root)
+    known_card_ids = {card.card_id for topic in topics for card in topic.cards}
+    if card_id not in known_card_ids:
+        raise HTTPException(
+            status_code=404,
+            detail={"code": "INTERVIEW_STUDY_CARD_NOT_FOUND", "message": "Study card not found."},
+        )
+    try:
+        progress = save_study_progress(default_progress_path(project_root), card_id, req.status)
+    except (OSError, sqlite3.Error, RuntimeError, ValueError) as exc:
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "code": "INTERVIEW_STUDY_WRITE_FAILED",
+                "message": "Failed to save local interview study progress.",
+            },
+        ) from exc
+    return {"progress": progress, "llm_calls": 0}
 
 
 def _outcome_payload(event, project_root: Path) -> dict:

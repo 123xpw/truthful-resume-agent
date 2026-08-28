@@ -350,6 +350,7 @@ def test_web_contract_exposes_dashboard_only() -> None:
         metadata = client.get("/api/meta")
         page = client.get("/")
         review_page = client.get("/project-review")
+        study_page = client.get("/interview-study")
     _assert(metadata.status_code == 200, "API metadata endpoint failed")
     _assert(metadata.json()["contract_version"] == "2026-08-26.2", "API contract version mismatch")
     _assert("EXPECTED_API_CONTRACT = '2026-08-26.2'" in page.text, "UI contract check missing")
@@ -359,6 +360,8 @@ def test_web_contract_exposes_dashboard_only() -> None:
     _assert("Agent 工程决策与复盘" in review_page.text, "project review title missing")
     _assert("93.5%" in review_page.text and "45.2%" in review_page.text, "context experiment decision missing")
     _assert("/project-review" in page.text, "dashboard does not link to project review")
+    _assert(study_page.status_code == 200 and "简历技术答辩训练" in study_page.text, "study page failed")
+    _assert("/interview-study" in page.text, "dashboard does not link to interview study")
     for removed_control in ('id="analyze-jd"', 'id="feishu-link-sequence"', 'id="outcome-form-title"'):
         _assert(removed_control not in page.text, f"legacy control remained visible: {removed_control}")
 

@@ -64,6 +64,9 @@ jobs:
       - name: Run deterministic job-analysis tests
         run: python -m backend.resume_agent.test_job_analysis
 
+      - name: Run local interview-study tests
+        run: python -m backend.resume_agent.test_interview_study
+
       - name: Run matcher cohort and label-contract tests
         run: python -m backend.resume_agent.test_matcher_eval
 

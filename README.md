@@ -452,7 +452,11 @@ boundaries, while unsupported technologies fail closed. Previewed JD text is
 not saved and the endpoint makes zero LLM calls. The static
 [project-review page](http://127.0.0.1:8000/project-review) records the origin,
 framework trade-offs, context experiment, engineering lessons, and interview
-boundaries without exposing private inputs. Open <http://127.0.0.1:8000/docs>
+boundaries without exposing private inputs. The local
+[interview-study page](http://127.0.0.1:8000/interview-study) parses an ignored
+Markdown handbook into active-recall cards, supports search and five-question
+practice, and stores self-ratings in local SQLite without an LLM call. A public
+clone shows only a built-in desensitized example. Open <http://127.0.0.1:8000/docs>
 for the API contract. Docker
 excludes private runtime files from the image context;
 the base Compose service receives no key, while the optional ignored override
