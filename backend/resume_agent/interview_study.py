@@ -19,6 +19,7 @@ _PROGRESS_LOCK = threading.RLock()
 
 EXAMPLE_STUDY_MARKDOWN = """# 面试技术复习示例
 
+<!-- study-group: Agent 核心与编排 -->
 ## Agent 基础
 
 ### Agent 与固定工作流有什么区别？
@@ -29,6 +30,7 @@ EXAMPLE_STUDY_MARKDOWN = """# 面试技术复习示例
 
 模型输出工具名称与结构化参数，宿主代码校验并执行函数，再把结果返回模型。
 
+<!-- study-group: RAG 与上下文 -->
 ## RAG 基础
 
 ### RAG 能保证事实正确吗？
@@ -48,6 +50,7 @@ class StudyCard:
 class StudyTopic:
     topic_id: str
     title: str
+    group: str
     intro_markdown: str
     cards: tuple[StudyCard, ...]
 
@@ -104,10 +107,12 @@ def _stable_id(kind: str, *parts: str) -> str:
 
 
 def parse_study_markdown(text: str) -> tuple[StudyTopic, ...]:
-    """Parse H2 topics and H3 answer cards without executing Markdown HTML."""
+    """Parse grouped H2 topics and H3 answer cards without executing HTML."""
 
     topics: list[StudyTopic] = []
     topic_title: str | None = None
+    topic_group = "基础与项目"
+    pending_group: str | None = None
     intro_lines: list[str] = []
     card_title: str | None = None
     card_lines: list[str] = []
@@ -151,6 +156,7 @@ def parse_study_markdown(text: str) -> tuple[StudyTopic, ...]:
                 StudyTopic(
                     topic_id=_stable_id("topic", clean_topic),
                     title=clean_topic,
+                    group=topic_group,
                     intro_markdown=intro,
                     cards=tuple(rendered_cards),
                 )
@@ -160,10 +166,21 @@ def parse_study_markdown(text: str) -> tuple[StudyTopic, ...]:
         cards = []
 
     for raw_line in text.splitlines():
+        group_marker = re.match(
+            r"^\s*<!--\s*study-group:\s*(.+?)\s*-->\s*$",
+            raw_line,
+            flags=re.IGNORECASE,
+        )
         h2 = re.match(r"^##\s+(.+?)\s*$", raw_line)
         h3 = re.match(r"^###\s+(.+?)\s*$", raw_line)
+        if group_marker:
+            pending_group = group_marker.group(1).strip()
+            continue
         if h2:
             finish_topic()
+            if pending_group:
+                topic_group = pending_group
+                pending_group = None
             topic_title = h2.group(1)
             continue
         if topic_title is None:
@@ -301,6 +318,7 @@ def build_study_payload(project_root: Path) -> dict[str, object]:
             {
                 "topic_id": topic.topic_id,
                 "title": topic.title,
+                "group": topic.group,
                 "intro_markdown": topic.intro_markdown,
                 "cards": cards,
             }
@@ -310,6 +328,7 @@ def build_study_payload(project_root: Path) -> dict[str, object]:
         "topics": topic_payloads,
         "summary": {
             "topic_count": len(topics),
+            "group_count": len({topic.group for topic in topics}),
             "card_count": len(card_ids),
             "status_counts": counts,
             "total_reviews": total_reviews,

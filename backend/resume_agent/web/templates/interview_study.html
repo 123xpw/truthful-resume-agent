@@ -49,9 +49,14 @@
   .search { width: 100%; height: 41px; padding: 0 0.75rem; border: 1px solid var(--line); border-radius: 10px; color: var(--ink); background: #f9fbfd; outline: none; }
   .search:focus { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(52,120,246,0.12); }
   .topic-nav { display: grid; gap: 0.28rem; margin-top: 0.75rem; }
+  .topic-group { min-width: 0; padding-top: 0.55rem; border-top: 1px solid #edf1f6; }
+  .topic-group:first-of-type { margin-top: 0.35rem; }
+  .topic-children { display: grid; gap: 0.2rem; margin: 0.22rem 0 0 0.42rem; padding-left: 0.42rem; border-left: 2px solid #e8edf4; }
   .topic-button { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.55rem; width: 100%; padding: 0.58rem 0.65rem; border: 0; border-radius: 9px; color: #475467; background: transparent; text-align: left; cursor: pointer; font-size: 0.74rem; }
   .topic-button:hover { background: #f4f7fb; }
   .topic-button.active { color: var(--navy); background: var(--blue-soft); font-weight: 760; }
+  .topic-button.group-button { color: #253d63; background: #f7f9fc; font-weight: 800; }
+  .topic-button.group-button.active { background: #e5eefc; }
   .topic-count { min-width: 23px; padding: 0.04rem 0.35rem; border-radius: 999px; color: var(--muted); background: #edf1f6; text-align: center; font-size: 0.65rem; }
   .content { min-width: 0; }
   .content-head { display: flex; justify-content: space-between; align-items: end; gap: 1rem; margin: 0 0 0.7rem; }
@@ -266,8 +271,10 @@ function renderMetrics() {
 
 function filteredTopics() {
   const query = state.query.trim().toLocaleLowerCase();
+  const activeGroup = state.activeTopic.startsWith('group:') ? state.activeTopic.slice(6) : null;
   return state.payload.topics.map(topic => {
-    if (state.activeTopic !== 'all' && topic.topic_id !== state.activeTopic) return null;
+    if (activeGroup && topic.group !== activeGroup) return null;
+    if (!activeGroup && state.activeTopic !== 'all' && topic.topic_id !== state.activeTopic) return null;
     const cards = topic.cards.filter(card => {
       if (state.practiceIds && !state.practiceIds.has(card.card_id)) return false;
       if (!query) return true;
@@ -279,9 +286,18 @@ function filteredTopics() {
 
 function renderTopicNav() {
   const topics = state.payload.topics;
+  const groups = [...new Set(topics.map(topic => topic.group || '基础与项目'))];
   document.getElementById('topic-nav').innerHTML = [
     `<button class="topic-button ${state.activeTopic === 'all' ? 'active' : ''}" data-topic="all"><span>全部主题</span><span class="topic-count">${allCards().length}</span></button>`,
-    ...topics.map(topic => `<button class="topic-button ${state.activeTopic === topic.topic_id ? 'active' : ''}" data-topic="${topic.topic_id}"><span>${escapeHtml(topic.title)}</span><span class="topic-count">${topic.cards.length}</span></button>`),
+    ...groups.map(group => {
+      const grouped = topics.filter(topic => (topic.group || '基础与项目') === group);
+      const groupId = `group:${group}`;
+      const cardCount = grouped.reduce((total, topic) => total + topic.cards.length, 0);
+      return `<section class="topic-group">
+        <button class="topic-button group-button ${state.activeTopic === groupId ? 'active' : ''}" data-topic="${escapeHtml(groupId)}"><span>${escapeHtml(group)}</span><span class="topic-count">${cardCount}</span></button>
+        <div class="topic-children">${grouped.map(topic => `<button class="topic-button ${state.activeTopic === topic.topic_id ? 'active' : ''}" data-topic="${topic.topic_id}"><span>${escapeHtml(topic.title)}</span><span class="topic-count">${topic.cards.length}</span></button>`).join('')}</div>
+      </section>`;
+    }),
   ].join('');
   document.querySelectorAll('[data-topic]').forEach(button => button.addEventListener('click', () => {
     state.activeTopic = button.dataset.topic;
@@ -345,8 +361,9 @@ function bindCards() {
 function renderContent() {
   const topics = filteredTopics();
   const count = topics.reduce((total, topic) => total + topic.cards.length, 0);
+  const activeGroup = state.activeTopic.startsWith('group:') ? state.activeTopic.slice(6) : null;
   const active = state.payload.topics.find(topic => topic.topic_id === state.activeTopic);
-  document.getElementById('content-title').textContent = state.practiceIds ? '随机练习 · 5 题' : (active?.title || '全部主题');
+  document.getElementById('content-title').textContent = state.practiceIds ? '随机练习 · 5 题' : (activeGroup || active?.title || '全部主题');
   document.getElementById('content-subtitle').textContent = state.practiceIds ? '优先抽取尚未掌握的题目。' : '点击问题前先尝试口述 60 秒。';
   document.getElementById('result-count').textContent = `${count} 道题`;
   const root = document.getElementById('study-content');

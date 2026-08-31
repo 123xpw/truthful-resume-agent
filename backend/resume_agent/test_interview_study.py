@@ -20,6 +20,7 @@ MARKDOWN = """# Private handbook
 
 Preamble is not a study card.
 
+<!-- study-group: Agent 核心与编排 -->
 ## 1. Agent 基础
 
 主题介绍。
@@ -34,6 +35,7 @@ Preamble is not a study card.
 schema -> model call -> host dispatch -> result
 ```
 
+<!-- study-group: RAG 与上下文 -->
 ## 2. RAG
 
 - 检索
@@ -58,6 +60,10 @@ def test_markdown_parser_builds_stable_topic_and_card_contract() -> None:
     first = parse_study_markdown(MARKDOWN)
     second = parse_study_markdown(MARKDOWN)
     _assert([topic.title for topic in first] == ["Agent 基础", "RAG"], "numbered headings were not normalized")
+    _assert(
+        [topic.group for topic in first] == ["Agent 核心与编排", "RAG 与上下文"],
+        "study-group markers were not applied",
+    )
     _assert(len(first[0].cards) == 2 and first[1].cards[0].title == "核心内容", "card grouping changed")
     _assert(first[0].intro_markdown == "主题介绍。", "topic intro was lost")
     _assert(first[0].cards[0].card_id == second[0].cards[0].card_id, "card IDs are not deterministic")
@@ -70,6 +76,7 @@ def test_missing_private_handbook_uses_a_public_example() -> None:
     _assert(payload["source"]["configured"] is False, "missing private handbook was presented as configured")
     _assert(payload["source"]["mode"] == "example", "public fallback mode is unclear")
     _assert(payload["summary"]["card_count"] >= 3, "public example has no useful cards")
+    _assert(payload["summary"]["group_count"] == 2, "public example grouping changed")
     _assert(payload["llm_calls"] == 0, "study loader unexpectedly reports an LLM call")
 
 

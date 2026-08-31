@@ -454,8 +454,8 @@ not saved and the endpoint makes zero LLM calls. The static
 framework trade-offs, context experiment, engineering lessons, and interview
 boundaries without exposing private inputs. The local
 [interview-study page](http://127.0.0.1:8000/interview-study) parses an ignored
-Markdown handbook into active-recall cards, supports search and five-question
-practice, and stores self-ratings in local SQLite without an LLM call. A public
+Markdown handbook into grouped active-recall cards, supports module/topic
+navigation, search and five-question practice, and stores self-ratings in local SQLite without an LLM call. A public
 clone shows only a built-in desensitized example. Open <http://127.0.0.1:8000/docs>
 for the API contract. Docker
 excludes private runtime files from the image context;
