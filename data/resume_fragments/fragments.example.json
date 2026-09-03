@@ -157,13 +157,13 @@
     "keywords": "Python, FastAPI, LangChain, LangGraph, Agent, Tool Calling / Function Calling, RAG, Qdrant, fastembed, SQLite, DeepSeek API",
     "bullets": {
       "A": [
-        "\\textbf{Agent 工作流与任务编排：}基于 FastAPI + LangChain + LangGraph 实现只读事实问答 Agent，将「检索→生成→校验→反思」建模为显式 StateGraph；通过 UUID 会话、SQLite checkpoint 与节点级 trace 支持状态隔离、恢复和调用追踪。",
-        "\\textbf{RAG 检索与事实约束：}实现 search\\_facts / verify\\_fact 工具调用与 keyword + Qdrant（fastembed）双路检索；按结构化事实建立向量索引，通过 fact\\_id、事实边界和 fail-closed 校验阻断无证据措辞，并为 LLM 超时与工具异常提供有限重试和结构化错误。",
+        "\\textbf{Agent 工作流与工程边界：}使用 Codex 辅助，以 FastAPI + LangChain + LangGraph 实现只读事实问答 Agent，将「检索→生成→校验→反思」建模为显式 StateGraph；通过 UUID 会话、SQLite checkpoint 与节点级 trace 支持状态隔离、恢复和调用追踪。",
+        "\\textbf{检索与事实约束：}Agent 通过 search\\_facts / verify\\_fact 调用确定性 keyword 事实工具；独立 JD 匹配器另提供 Qdrant（fastembed）semantic opt-in 路径，两者均保留 fact\\_id 与事实边界，并对无证据措辞 fail-closed。",
         "\\textbf{评测与策略决策：}以 4 个 JD × 11 条 fact 完整审计标签对比 keyword 与 Qdrant；semantic 宏平均有用召回由 80\\% 升至 88\\%，有用精度由 64\\% 降至 56\\%，且数据岗出现无关误召，因此保持为 opt-in 策略。"
       ],
       "B": [
-        "\\textbf{Agent 工作流：}基于 FastAPI + LangChain + LangGraph 实现只读事实问答 Agent，以 UUID 会话、SQLite checkpoint 与节点 trace 支持状态隔离、恢复和调用追踪。",
-        "\\textbf{RAG 与事实约束：}实现 keyword + Qdrant（fastembed）双路检索及 search\\_facts / verify\\_fact 工具调用，通过 fact\\_id、事实边界和 fail-closed 校验阻断无证据措辞。",
+        "\\textbf{Agent 工作流：}使用 Codex 辅助，以 FastAPI + LangChain + LangGraph 实现只读事实问答 Agent，以 UUID 会话、SQLite checkpoint 与节点 trace 支持状态隔离、恢复和调用追踪。",
+        "\\textbf{检索与事实约束：}Agent 使用 keyword 事实工具，独立 JD 匹配器提供 Qdrant（fastembed）semantic opt-in 检索；通过 fact\\_id、事实边界和 fail-closed 校验阻断无证据措辞。",
         "\\textbf{评测与策略决策：}在 4 个 JD × 11 条 fact 完整审计标签上对比 keyword 与 Qdrant，根据召回增益和明确误召保持 semantic opt-in。"
       ]
     }

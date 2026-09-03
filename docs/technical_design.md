@@ -334,11 +334,12 @@ START
   -> verify     (strict JSON PASS / FAIL against summary + boundaries)
   -> conditional edge:
        PASS        -> END
-       FAIL < 3 turns -> reflect -> retrieve  (retry)
-       FAIL >= 3 turns -> END
+       fewer than 3 reflections -> reflect -> retrieve  (retry)
+       3 reflections exhausted -> END
 ```
 
-`MAX_TURNS = 3` bounds the verifier repair loop. Provider calls separately use
+`MAX_TURNS = 3` bounds the repair loop to three reflections after the initial
+attempt, so the worst case contains four verifier attempts. Provider calls separately use
 an explicit timeout and at most two retries for timeout, connection, 429, or
 5xx failures. Authentication and invalid requests do not retry. The LLM is
 lazily constructed via the configuration functions in `llm_client.py`.

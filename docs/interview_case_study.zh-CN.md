@@ -6,7 +6,7 @@
 
 我在反复根据 JD 修改简历时发现，最大的风险不只是生成质量，而是模型容易把“相关”改写成“做过”，并且手工修改后很难追踪最终 PDF 中每条 bullet 的来源。因此我把系统拆成三层：LLM 只负责模糊理解和建议；确定性代码负责事实 ID、内容哈希、授权状态和最终产物审计；候选人保留最终授权权力。
 
-工程上，项目包含 FastAPI、LangGraph 事实问答 Agent、关键词与 Qdrant 双路检索、本地 SQLite checkpoint、节点 trace、固定回归案例，以及实际 TeX/PDF 的来源和 SHA256 审计。它目前是本地单用户 MVP，不具备多用户鉴权、高并发服务或生产 SLA。
+工程上，项目包含 FastAPI、LangGraph 事实问答 Agent、关键词与 Qdrant 两条检索能力、本地 SQLite checkpoint、节点 trace、固定回归案例，以及实际 TeX/PDF 的来源和 SHA256 审计。需要区分的是：对话 Agent 的 `search_facts` 当前使用确定性 keyword top-5；Qdrant semantic 是独立 JD 匹配器中的 opt-in 路径，不在 Agent 工具内部。它目前是本地单用户 MVP，不具备多用户鉴权、高并发服务或生产 SLA。
 
 ## 1. 为什么需要 Agent，规则系统不能完成吗？
 

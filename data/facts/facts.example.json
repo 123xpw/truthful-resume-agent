@@ -337,6 +337,7 @@
       "Personal/local fact Q&A service, not a multi-user assistant with authentication, distributed execution, or external production monitoring.",
       "The agent retrieves and explains existing facts; it does not write facts, review decisions, or resume wording.",
       "The verification node is an LLM judgment rather than cryptographic proof.",
+      "Codex assisted implementation and documentation; do not claim unaided authorship or line-by-line mastery of the entire codebase.",
       "The API uses a local SQLite checkpointer, while the REPL can still use MemorySaver; cross-session preferences use a separate local JSON file.",
       "SQLite checkpoints contain conversation state and evidence; the separate trace tables exclude raw chat, JD, resume text, provider bodies, and API keys.",
       "Timeouts and transient retries are bounded, but no distributed queue, circuit breaker, or availability SLA is implemented."
